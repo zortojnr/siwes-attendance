@@ -16,7 +16,11 @@ import {
   CheckCircle,
   AlertCircle,
   Building,
-  Users
+  Users,
+  Star,
+  Sparkles,
+  Zap,
+  Heart
 } from 'lucide-react';
 
 interface User {
@@ -48,6 +52,7 @@ export default function SiwesApp() {
   const [currentView, setCurrentView] = useState<'login' | 'register' | 'student-home' | 'admin-home' | 'admin-login'>('login');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   const { toast } = useToast();
 
   // Form states
@@ -247,8 +252,12 @@ export default function SiwesApp() {
         setAttendanceRecords(prev => [newRecord, ...prev]);
         setIsLoading(false);
         
+        // Trigger celebration animation
+        setShowCelebration(true);
+        setTimeout(() => setShowCelebration(false), 2000);
+        
         toast({
-          title: "Check-in Successful",
+          title: "Check-in Successful! 🎉",
           description: `Location recorded: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
           variant: "default"
         });
@@ -262,6 +271,22 @@ export default function SiwesApp() {
         });
       }
     );
+  };
+
+  const renderConfetti = () => {
+    return Array.from({ length: 20 }).map((_, i) => (
+      <div
+        key={i}
+        className={`absolute animate-confetti pointer-events-none`}
+        style={{
+          left: `${Math.random() * 100}%`,
+          animationDelay: `${Math.random() * 2}s`,
+          animationDuration: `${2 + Math.random() * 2}s`
+        }}
+      >
+        {i % 4 === 0 ? '🎉' : i % 4 === 1 ? '⭐' : i % 4 === 2 ? '🎊' : '✨'}
+      </div>
+    ));
   };
 
   const handleDownloadReport = () => {
@@ -329,13 +354,32 @@ export default function SiwesApp() {
   // Render Admin Login Page
   if (currentView === 'admin-login') {
     return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl">
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-20 left-20 animate-float">
+            <Settings className="h-8 w-8 text-primary/20 animate-rotate-slow" />
+          </div>
+          <div className="absolute top-40 right-32 animate-float" style={{ animationDelay: '1s' }}>
+            <Users className="h-6 w-6 text-secondary/20 animate-pulse-glow" />
+          </div>
+          <div className="absolute bottom-32 left-32 animate-float" style={{ animationDelay: '2s' }}>
+            <Star className="h-10 w-10 text-accent/20 animate-rotate-slow" style={{ animationDirection: 'reverse' }} />
+          </div>
+          <div className="absolute bottom-20 right-20 animate-float" style={{ animationDelay: '0.5s' }}>
+            <Sparkles className="h-7 w-7 text-primary/30 animate-pulse" />
+          </div>
+        </div>
+        
+        <Card className="w-full max-w-md shadow-xl animate-bounce-in relative z-10">
           <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-primary">Admin Login</CardTitle>
-            <CardDescription>Sign in to admin dashboard</CardDescription>
+            <div className="mx-auto mb-4 p-4 bg-gradient-primary rounded-full animate-pulse-glow">
+              <Settings className="h-8 w-8 text-primary-foreground animate-rotate-slow" />
+            </div>
+            <CardTitle className="text-3xl font-bold text-primary animate-zoom-in">Admin Login</CardTitle>
+            <CardDescription className="animate-slide-up">Sign in to admin dashboard</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
             <form onSubmit={handleAdminLogin} className="space-y-4">
               <div>
                 <Input
@@ -343,7 +387,7 @@ export default function SiwesApp() {
                   placeholder="Admin Email"
                   value={adminLoginForm.email}
                   onChange={(e) => setAdminLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full"
+                  className="w-full transition-all duration-300 focus:animate-pulse-glow"
                 />
               </div>
               <div>
@@ -352,11 +396,21 @@ export default function SiwesApp() {
                   placeholder="Admin Password"
                   value={adminLoginForm.password}
                   onChange={(e) => setAdminLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                  className="w-full"
+                  className="w-full transition-all duration-300 focus:animate-pulse-glow"
                 />
               </div>
-              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
-                {isLoading ? "Signing In..." : "Admin Sign In"}
+              <Button type="submit" variant="hero" size="lg" className="w-full animate-pulse-glow" disabled={isLoading}>
+                {isLoading ? (
+                  <span className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Signing In...
+                  </span>
+                ) : (
+                  <span className="flex items-center">
+                    <Zap className="h-4 w-4 mr-2" />
+                    Admin Sign In
+                  </span>
+                )}
               </Button>
             </form>
             <div className="mt-6 text-center">
@@ -364,7 +418,7 @@ export default function SiwesApp() {
                 Not an admin?{' '}
                 <button
                   onClick={() => setCurrentView('login')}
-                  className="text-primary hover:underline font-medium"
+                  className="text-primary hover:underline font-medium transition-all hover:animate-shake"
                 >
                   Student login
                 </button>
@@ -379,13 +433,38 @@ export default function SiwesApp() {
   // Render Student Login Page
   if (currentView === 'login') {
     return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl">
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-16 left-16 animate-float">
+            <UserCheck className="h-12 w-12 text-primary/20 animate-pulse" />
+          </div>
+          <div className="absolute top-32 right-24 animate-float" style={{ animationDelay: '1.5s' }}>
+            <Heart className="h-8 w-8 text-accent/30 animate-pulse-glow" />
+          </div>
+          <div className="absolute bottom-40 left-24 animate-float" style={{ animationDelay: '3s' }}>
+            <Sparkles className="h-10 w-10 text-secondary/25 animate-rotate-slow" />
+          </div>
+          <div className="absolute bottom-16 right-16 animate-float" style={{ animationDelay: '2s' }}>
+            <Star className="h-6 w-6 text-primary/40 animate-bounce" />
+          </div>
+          <div className="absolute top-1/2 left-8 animate-float" style={{ animationDelay: '4s' }}>
+            <Zap className="h-5 w-5 text-accent/20 animate-pulse" />
+          </div>
+          <div className="absolute top-1/2 right-8 animate-float" style={{ animationDelay: '2.5s' }}>
+            <CheckCircle className="h-7 w-7 text-success/25 animate-spin" style={{ animationDuration: '8s' }} />
+          </div>
+        </div>
+        
+        <Card className="w-full max-w-md shadow-xl animate-bounce-in relative z-10">
           <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-primary">SIWES Attendance</CardTitle>
-            <CardDescription>Sign in to your account</CardDescription>
+            <div className="mx-auto mb-4 p-3 bg-gradient-primary rounded-full animate-pulse-glow">
+              <UserCheck className="h-8 w-8 text-primary-foreground" />
+            </div>
+            <CardTitle className="text-3xl font-bold text-primary animate-zoom-in">SIWES Attendance</CardTitle>
+            <CardDescription className="animate-slide-up">Sign in to your account</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <Input
@@ -393,7 +472,7 @@ export default function SiwesApp() {
                   placeholder="Email"
                   value={loginForm.email}
                   onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full"
+                  className="w-full transition-all duration-300 focus:animate-pulse-glow"
                 />
               </div>
               <div>
@@ -402,19 +481,26 @@ export default function SiwesApp() {
                   placeholder="Password"
                   value={loginForm.password}
                   onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                  className="w-full"
+                  className="w-full transition-all duration-300 focus:animate-pulse-glow"
                 />
               </div>
-              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
-                {isLoading ? "Signing In..." : "Sign In"}
+              <Button type="submit" variant="hero" size="lg" className="w-full animate-pulse-glow" disabled={isLoading}>
+                {isLoading ? (
+                  <span className="flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Signing In...
+                  </span>
+                ) : (
+                  "Sign In"
+                )}
               </Button>
             </form>
-            <div className="mt-6 text-center space-y-3">
+            <div className="mt-6 text-center space-y-3 animate-slide-up" style={{ animationDelay: '0.3s' }}>
               <p className="text-sm text-muted-foreground">
                 Don't have an account?{' '}
                 <button
                   onClick={() => setCurrentView('register')}
-                  className="text-primary hover:underline font-medium"
+                  className="text-primary hover:underline font-medium transition-all hover:animate-shake"
                 >
                   Register here
                 </button>
@@ -423,7 +509,7 @@ export default function SiwesApp() {
                 Are you an admin?{' '}
                 <button
                   onClick={() => setCurrentView('admin-login')}
-                  className="text-primary hover:underline font-medium"
+                  className="text-primary hover:underline font-medium transition-all hover:animate-shake"
                 >
                   Admin login
                 </button>
@@ -438,13 +524,32 @@ export default function SiwesApp() {
   // Render Register Page
   if (currentView === 'register') {
     return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-xl">
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Animated Background Elements */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-20 left-16 animate-float">
+            <User className="h-10 w-10 text-primary/20 animate-bounce" />
+          </div>
+          <div className="absolute top-1/3 right-12 animate-float" style={{ animationDelay: '2s' }}>
+            <Sparkles className="h-8 w-8 text-accent/25 animate-pulse-glow" />
+          </div>
+          <div className="absolute bottom-1/4 left-12 animate-float" style={{ animationDelay: '1s' }}>
+            <Heart className="h-6 w-6 text-secondary/30 animate-pulse" />
+          </div>
+          <div className="absolute bottom-16 right-24 animate-float" style={{ animationDelay: '3s' }}>
+            <CheckCircle className="h-9 w-9 text-success/20 animate-rotate-slow" />
+          </div>
+        </div>
+        
+        <Card className="w-full max-w-md shadow-xl animate-bounce-in relative z-10">
           <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold text-primary">Create Account</CardTitle>
-            <CardDescription>Register for SIWES Attendance</CardDescription>
+            <div className="mx-auto mb-4 p-3 bg-gradient-secondary rounded-full animate-pulse-glow">
+              <User className="h-8 w-8 text-secondary-foreground" />
+            </div>
+            <CardTitle className="text-3xl font-bold text-primary animate-zoom-in">Create Account</CardTitle>
+            <CardDescription className="animate-slide-up">Register for SIWES Attendance</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
                 <Input
@@ -506,7 +611,7 @@ export default function SiwesApp() {
                 type="button" 
                 variant="outline" 
                 size="lg" 
-                className="w-full" 
+                className="w-full transition-all hover:animate-pulse-glow" 
                 onClick={handleGoogleSignUp}
               >
                 <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
@@ -518,12 +623,12 @@ export default function SiwesApp() {
                 Sign up with Google
               </Button>
             </form>
-            <div className="mt-6 text-center">
+            <div className="mt-6 text-center animate-slide-up" style={{ animationDelay: '0.4s' }}>
               <p className="text-sm text-muted-foreground">
                 Already have an account?{' '}
                 <button
                   onClick={() => setCurrentView('login')}
-                  className="text-primary hover:underline font-medium"
+                  className="text-primary hover:underline font-medium transition-all hover:animate-shake"
                 >
                   Sign in here
                 </button>
@@ -538,7 +643,16 @@ export default function SiwesApp() {
   // Render Student Dashboard
   if (currentView === 'student-home') {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background relative">
+        {/* Celebration Animation Overlay */}
+        {showCelebration && (
+          <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+            {renderConfetti()}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="animate-celebration text-6xl">🎉</div>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <header className="bg-gradient-primary text-primary-foreground shadow-lg">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -580,11 +694,21 @@ export default function SiwesApp() {
                   <Button 
                     variant="hero" 
                     size="lg" 
-                    className="w-full"
+                    className={`w-full transition-all duration-300 ${showCelebration ? 'animate-celebration' : 'hover:animate-pulse-glow'}`}
                     onClick={handleCheckIn}
                     disabled={isLoading}
                   >
-                    {isLoading ? "Getting Location..." : "Check In Now"}
+                    {isLoading ? (
+                      <span className="flex items-center">
+                        <MapPin className="h-4 w-4 mr-2 animate-pulse" />
+                        Getting Location...
+                      </span>
+                    ) : (
+                      <span className="flex items-center">
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Check In Now
+                      </span>
+                    )}
                   </Button>
                   
                   {studentAttendance.length > 0 && (
