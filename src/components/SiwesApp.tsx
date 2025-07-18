@@ -45,15 +45,17 @@ interface SiwesLocation {
 }
 
 export default function SiwesApp() {
-  const [currentView, setCurrentView] = useState<'login' | 'register' | 'student-home' | 'admin-home'>('login');
+  const [currentView, setCurrentView] = useState<'login' | 'register' | 'student-home' | 'admin-home' | 'admin-login'>('login');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   // Form states
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [adminLoginForm, setAdminLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
     password: '',
     confirmPassword: ''
@@ -102,18 +104,17 @@ export default function SiwesApp() {
 
     setIsLoading(true);
     
-    // Simulate login
+    // Simulate student login
     setTimeout(() => {
-      const isAdmin = loginForm.email.includes('admin');
       const user: User = {
         id: Date.now().toString(),
-        name: isAdmin ? 'Admin User' : 'Student User',
+        name: 'Student User',
         email: loginForm.email,
-        role: isAdmin ? 'admin' : 'student'
+        role: 'student'
       };
       
       setCurrentUser(user);
-      setCurrentView(isAdmin ? 'admin-home' : 'student-home');
+      setCurrentView('student-home');
       setIsLoading(false);
       
       toast({
@@ -126,10 +127,46 @@ export default function SiwesApp() {
     }, 1000);
   };
 
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminLoginForm.email || !adminLoginForm.password) {
+      toast({
+        title: "Error",
+        description: "Please fill in all fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    
+    // Simulate admin login
+    setTimeout(() => {
+      const user: User = {
+        id: Date.now().toString(),
+        name: 'Admin User',
+        email: adminLoginForm.email,
+        role: 'admin'
+      };
+      
+      setCurrentUser(user);
+      setCurrentView('admin-home');
+      setIsLoading(false);
+      
+      toast({
+        title: "Admin Login Successful",
+        description: `Welcome ${user.name}!`,
+        variant: "default"
+      });
+      
+      setAdminLoginForm({ email: '', password: '' });
+    }, 1000);
+  };
+
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!registerForm.name || !registerForm.email || !registerForm.password || !registerForm.confirmPassword) {
+    if (!registerForm.firstName || !registerForm.lastName || !registerForm.email || !registerForm.password || !registerForm.confirmPassword) {
       toast({
         title: "Error",
         description: "Please fill in all fields",
@@ -152,7 +189,7 @@ export default function SiwesApp() {
     setTimeout(() => {
       const newUser: User = {
         id: Date.now().toString(),
-        name: registerForm.name,
+        name: `${registerForm.firstName} ${registerForm.lastName}`,
         email: registerForm.email,
         role: 'student'
       };
@@ -168,8 +205,16 @@ export default function SiwesApp() {
         variant: "default"
       });
       
-      setRegisterForm({ name: '', email: '', password: '', confirmPassword: '' });
+      setRegisterForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '' });
     }, 1000);
+  };
+
+  const handleGoogleSignUp = () => {
+    toast({
+      title: "Google Sign-up",
+      description: "Google authentication will be implemented in the backend",
+      variant: "default"
+    });
   };
 
   const handleCheckIn = () => {
@@ -281,7 +326,57 @@ export default function SiwesApp() {
 
   const studentAttendance = attendanceRecords.filter(record => record.studentId === currentUser?.id);
 
-  // Render Login Page
+  // Render Admin Login Page
+  if (currentView === 'admin-login') {
+    return (
+      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-xl">
+          <CardHeader className="text-center">
+            <CardTitle className="text-3xl font-bold text-primary">Admin Login</CardTitle>
+            <CardDescription>Sign in to admin dashboard</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAdminLogin} className="space-y-4">
+              <div>
+                <Input
+                  type="email"
+                  placeholder="Admin Email"
+                  value={adminLoginForm.email}
+                  onChange={(e) => setAdminLoginForm(prev => ({ ...prev, email: e.target.value }))}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <Input
+                  type="password"
+                  placeholder="Admin Password"
+                  value={adminLoginForm.password}
+                  onChange={(e) => setAdminLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                  className="w-full"
+                />
+              </div>
+              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
+                {isLoading ? "Signing In..." : "Admin Sign In"}
+              </Button>
+            </form>
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Not an admin?{' '}
+                <button
+                  onClick={() => setCurrentView('login')}
+                  className="text-primary hover:underline font-medium"
+                >
+                  Student login
+                </button>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render Student Login Page
   if (currentView === 'login') {
     return (
       <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
@@ -314,7 +409,7 @@ export default function SiwesApp() {
                 {isLoading ? "Signing In..." : "Sign In"}
               </Button>
             </form>
-            <div className="mt-6 text-center">
+            <div className="mt-6 text-center space-y-3">
               <p className="text-sm text-muted-foreground">
                 Don't have an account?{' '}
                 <button
@@ -324,10 +419,14 @@ export default function SiwesApp() {
                   Register here
                 </button>
               </p>
-            </div>
-            <div className="mt-4 p-3 bg-accent-light rounded-lg">
-              <p className="text-xs text-center text-muted-foreground">
-                Demo: Use any email with "admin" for admin access, or register as a student
+              <p className="text-sm text-muted-foreground">
+                Are you an admin?{' '}
+                <button
+                  onClick={() => setCurrentView('admin-login')}
+                  className="text-primary hover:underline font-medium"
+                >
+                  Admin login
+                </button>
               </p>
             </div>
           </CardContent>
@@ -350,16 +449,25 @@ export default function SiwesApp() {
               <div>
                 <Input
                   type="text"
-                  placeholder="Full Name"
-                  value={registerForm.name}
-                  onChange={(e) => setRegisterForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="First Name"
+                  value={registerForm.firstName}
+                  onChange={(e) => setRegisterForm(prev => ({ ...prev, firstName: e.target.value }))}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <Input
+                  type="text"
+                  placeholder="Last Name"
+                  value={registerForm.lastName}
+                  onChange={(e) => setRegisterForm(prev => ({ ...prev, lastName: e.target.value }))}
                   className="w-full"
                 />
               </div>
               <div>
                 <Input
                   type="email"
-                  placeholder="Email"
+                  placeholder="Student Email"
                   value={registerForm.email}
                   onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
                   className="w-full"
@@ -385,6 +493,29 @@ export default function SiwesApp() {
               </div>
               <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
                 {isLoading ? "Creating Account..." : "Create Account"}
+              </Button>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Or</span>
+                </div>
+              </div>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="lg" 
+                className="w-full" 
+                onClick={handleGoogleSignUp}
+              >
+                <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+                Sign up with Google
               </Button>
             </form>
             <div className="mt-6 text-center">
