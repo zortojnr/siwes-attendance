@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { 
   User, 
   MapPin, 
@@ -23,34 +25,40 @@ import {
   Heart
 } from 'lucide-react';
 
-interface User {
+interface UserProfile {
   id: string;
-  name: string;
-  email: string;
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
   role: 'student' | 'admin';
 }
 
 interface AttendanceRecord {
   id: string;
-  studentId: string;
-  studentName: string;
+  user_id: string;
+  student_name: string;
   date: string;
   time: string;
   latitude: number;
   longitude: number;
-  locationName?: string;
+  location_name?: string;
+  created_at: string;
 }
 
 interface SiwesLocation {
   id: string;
-  studentName: string;
+  student_name: string;
   location: string;
-  assignedDate: string;
+  assigned_date: string;
+  assigned_by?: string;
+  created_at: string;
 }
 
 export default function SiwesApp() {
   const [currentView, setCurrentView] = useState<'login' | 'register' | 'student-home' | 'admin-home' | 'admin-login'>('login');
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const { toast } = useToast();
@@ -68,35 +76,80 @@ export default function SiwesApp() {
 
   // App data states
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [students, setStudents] = useState<User[]>([]);
   const [siwesLocations, setSiwesLocations] = useState<SiwesLocation[]>([]);
   const [newLocation, setNewLocation] = useState({ studentName: '', location: '' });
 
-  // Load data from localStorage on component mount
+  // Initialize auth state
   useEffect(() => {
-    const savedAttendance = localStorage.getItem('siwes-attendance');
-    const savedStudents = localStorage.getItem('siwes-students');
-    const savedLocations = localStorage.getItem('siwes-locations');
-    
-    if (savedAttendance) setAttendanceRecords(JSON.parse(savedAttendance));
-    if (savedStudents) setStudents(JSON.parse(savedStudents));
-    if (savedLocations) setSiwesLocations(JSON.parse(savedLocations));
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          // Fetch user profile
+          setTimeout(async () => {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('user_id', session.user.id)
+              .single();
+            
+            if (profile) {
+              setUserProfile(profile as UserProfile);
+              setCurrentView(profile.role === 'admin' ? 'admin-home' : 'student-home');
+            }
+          }, 0);
+        } else {
+          setUserProfile(null);
+          setCurrentView('login');
+        }
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Save data to localStorage whenever data changes
+  // Load attendance and location data when user changes
   useEffect(() => {
-    localStorage.setItem('siwes-attendance', JSON.stringify(attendanceRecords));
-  }, [attendanceRecords]);
+    if (user) {
+      loadAttendanceRecords();
+      loadSiwesLocations();
+    }
+  }, [user]);
 
-  useEffect(() => {
-    localStorage.setItem('siwes-students', JSON.stringify(students));
-  }, [students]);
+  const loadAttendanceRecords = async () => {
+    if (!user) return;
+    
+    const { data, error } = await supabase
+      .from('attendance_records')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (data && !error) {
+      setAttendanceRecords(data as AttendanceRecord[]);
+    }
+  };
 
-  useEffect(() => {
-    localStorage.setItem('siwes-locations', JSON.stringify(siwesLocations));
-  }, [siwesLocations]);
+  const loadSiwesLocations = async () => {
+    const { data, error } = await supabase
+      .from('siwes_locations')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (data && !error) {
+      setSiwesLocations(data as SiwesLocation[]);
+    }
+  };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginForm.email || !loginForm.password) {
       toast({
@@ -109,30 +162,30 @@ export default function SiwesApp() {
 
     setIsLoading(true);
     
-    // Simulate student login
-    setTimeout(() => {
-      const user: User = {
-        id: Date.now().toString(),
-        name: 'Student User',
-        email: loginForm.email,
-        role: 'student'
-      };
-      
-      setCurrentUser(user);
-      setCurrentView('student-home');
-      setIsLoading(false);
-      
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginForm.email,
+      password: loginForm.password,
+    });
+
+    setIsLoading(false);
+
+    if (error) {
+      toast({
+        title: "Login Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
       toast({
         title: "Login Successful",
-        description: `Welcome ${user.name}!`,
+        description: "Welcome back!",
         variant: "default"
       });
-      
       setLoginForm({ email: '', password: '' });
-    }, 1000);
+    }
   };
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!adminLoginForm.email || !adminLoginForm.password) {
       toast({
@@ -145,30 +198,41 @@ export default function SiwesApp() {
 
     setIsLoading(true);
     
-    // Simulate admin login
-    setTimeout(() => {
-      const user: User = {
-        id: Date.now().toString(),
-        name: 'Admin User',
-        email: adminLoginForm.email,
-        role: 'admin'
-      };
-      
-      setCurrentUser(user);
-      setCurrentView('admin-home');
-      setIsLoading(false);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: adminLoginForm.email,
+      password: adminLoginForm.password,
+    });
+
+    setIsLoading(false);
+
+    if (error) {
+      toast({
+        title: "Admin Login Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
+      // Check if user is admin
+      if (userProfile?.role !== 'admin') {
+        toast({
+          title: "Access Denied",
+          description: "Admin privileges required",
+          variant: "destructive"
+        });
+        await supabase.auth.signOut();
+        return;
+      }
       
       toast({
         title: "Admin Login Successful",
-        description: `Welcome ${user.name}!`,
+        description: "Welcome Admin!",
         variant: "default"
       });
-      
       setAdminLoginForm({ email: '', password: '' });
-    }, 1000);
+    }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!registerForm.firstName || !registerForm.lastName || !registerForm.email || !registerForm.password || !registerForm.confirmPassword) {
@@ -191,42 +255,62 @@ export default function SiwesApp() {
 
     setIsLoading(true);
     
-    setTimeout(() => {
-      const newUser: User = {
-        id: Date.now().toString(),
-        name: `${registerForm.firstName} ${registerForm.lastName}`,
-        email: registerForm.email,
-        role: 'student'
-      };
-      
-      setStudents(prev => [...prev, newUser]);
-      setCurrentUser(newUser);
-      setCurrentView('student-home');
-      setIsLoading(false);
-      
+    const { error } = await supabase.auth.signUp({
+      email: registerForm.email,
+      password: registerForm.password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/`,
+        data: {
+          first_name: registerForm.firstName,
+          last_name: registerForm.lastName,
+          role: 'student'
+        }
+      }
+    });
+
+    setIsLoading(false);
+
+    if (error) {
+      toast({
+        title: "Registration Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
       toast({
         title: "Registration Successful",
-        description: `Welcome ${newUser.name}!`,
+        description: "Welcome! Please check your email to verify your account.",
         variant: "default"
       });
-      
       setRegisterForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '' });
-    }, 1000);
+    }
   };
 
-  const handleGoogleSignUp = () => {
-    toast({
-      title: "Google Sign-up",
-      description: "Google authentication will be implemented in the backend",
-      variant: "default"
+  const handleGoogleSignUp = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/`,
+        queryParams: {
+          hd: 'student.edu' // Restrict to student emails
+        }
+      }
     });
+
+    if (error) {
+      toast({
+        title: "Google Sign-up Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleCheckIn = () => {
-    if (!navigator.geolocation) {
+  const handleCheckIn = async () => {
+    if (!navigator.geolocation || !user || !userProfile) {
       toast({
         title: "Error",
-        description: "Geolocation is not supported by this browser",
+        description: !navigator.geolocation ? "Geolocation is not supported by this browser" : "Please log in to check in",
         variant: "destructive"
       });
       return;
@@ -235,32 +319,41 @@ export default function SiwesApp() {
     setIsLoading(true);
     
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const { latitude, longitude } = position.coords;
         
-        const newRecord: AttendanceRecord = {
-          id: Date.now().toString(),
-          studentId: currentUser!.id,
-          studentName: currentUser!.name,
-          date: new Date().toLocaleDateString(),
-          time: new Date().toLocaleTimeString(),
-          latitude,
-          longitude,
-          locationName: `Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
-        };
-        
-        setAttendanceRecords(prev => [newRecord, ...prev]);
+        const { error } = await supabase
+          .from('attendance_records')
+          .insert({
+            user_id: user.id,
+            student_name: `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim(),
+            latitude: latitude,
+            longitude: longitude,
+            location_name: `Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+          });
+
         setIsLoading(false);
-        
-        // Trigger celebration animation
-        setShowCelebration(true);
-        setTimeout(() => setShowCelebration(false), 2000);
-        
-        toast({
-          title: "Check-in Successful! 🎉",
-          description: `Location recorded: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-          variant: "default"
-        });
+
+        if (error) {
+          toast({
+            title: "Check-in Failed",
+            description: error.message,
+            variant: "destructive"
+          });
+        } else {
+          // Reload attendance records
+          await loadAttendanceRecords();
+          
+          // Trigger celebration animation
+          setShowCelebration(true);
+          setTimeout(() => setShowCelebration(false), 2000);
+          
+          toast({
+            title: "Check-in Successful! 🎉",
+            description: `Location recorded: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            variant: "default"
+          });
+        }
       },
       (error) => {
         setIsLoading(false);
@@ -293,7 +386,7 @@ export default function SiwesApp() {
     const csvContent = "data:text/csv;charset=utf-8," + 
       "Student Name,Date,Time,Latitude,Longitude\n" +
       attendanceRecords.map(record => 
-        `${record.studentName},${record.date},${record.time},${record.latitude},${record.longitude}`
+        `${record.student_name},${record.date},${record.time},${record.latitude},${record.longitude}`
       ).join("\n");
 
     const encodedUri = encodeURI(csvContent);
@@ -311,9 +404,9 @@ export default function SiwesApp() {
     });
   };
 
-  const handleAssignLocation = (e: React.FormEvent) => {
+  const handleAssignLocation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLocation.studentName || !newLocation.location) {
+    if (!newLocation.studentName || !newLocation.location || !user) {
       toast({
         title: "Error",
         description: "Please fill in all fields",
@@ -322,26 +415,34 @@ export default function SiwesApp() {
       return;
     }
 
-    const assignment: SiwesLocation = {
-      id: Date.now().toString(),
-      studentName: newLocation.studentName,
-      location: newLocation.location,
-      assignedDate: new Date().toLocaleDateString()
-    };
+    const { error } = await supabase
+      .from('siwes_locations')
+      .insert({
+        student_name: newLocation.studentName,
+        location: newLocation.location,
+        assigned_by: user.id
+      });
 
-    setSiwesLocations(prev => [assignment, ...prev]);
-    setNewLocation({ studentName: '', location: '' });
-    
-    toast({
-      title: "Location Assigned",
-      description: `${newLocation.location} assigned to ${newLocation.studentName}`,
-      variant: "default"
-    });
+    if (error) {
+      toast({
+        title: "Assignment Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
+      await loadSiwesLocations();
+      setNewLocation({ studentName: '', location: '' });
+      
+      toast({
+        title: "Location Assigned",
+        description: `${newLocation.location} assigned to ${newLocation.studentName}`,
+        variant: "default"
+      });
+    }
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setCurrentView('login');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     toast({
       title: "Logged Out",
       description: "You have been logged out successfully",
@@ -349,7 +450,7 @@ export default function SiwesApp() {
     });
   };
 
-  const studentAttendance = attendanceRecords.filter(record => record.studentId === currentUser?.id);
+  const studentAttendance = attendanceRecords.filter(record => record.user_id === user?.id);
 
   // Render Admin Login Page
   if (currentView === 'admin-login') {
@@ -666,8 +767,8 @@ export default function SiwesApp() {
               </div>
               <div className="flex items-center space-x-4">
                 <div className="text-right">
-                  <p className="font-medium">{currentUser?.name}</p>
-                  <p className="text-sm opacity-90">{currentUser?.email}</p>
+                  <p className="font-medium">{userProfile?.first_name} {userProfile?.last_name}</p>
+                  <p className="text-sm opacity-90">{user?.email}</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-white/10">
                   <LogOut className="h-4 w-4 mr-2" />
@@ -795,8 +896,8 @@ export default function SiwesApp() {
               </div>
               <div className="flex items-center space-x-4">
                 <div className="text-right">
-                  <p className="font-medium">{currentUser?.name}</p>
-                  <p className="text-sm opacity-90">{currentUser?.email}</p>
+                  <p className="font-medium">{userProfile?.first_name} {userProfile?.last_name}</p>
+                  <p className="text-sm opacity-90">{user?.email}</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-white/10">
                   <LogOut className="h-4 w-4 mr-2" />
@@ -819,29 +920,10 @@ export default function SiwesApp() {
                 <CardDescription>List of all students in the system</CardDescription>
               </CardHeader>
               <CardContent>
-                {students.length === 0 ? (
-                  <div className="text-center py-8">
-                    <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No students registered yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {students.map((student) => (
-                      <div key={student.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div className="bg-primary-foreground border-2 border-primary p-2 rounded-full">
-                            <User className="h-4 w-4 text-primary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{student.name}</p>
-                            <p className="text-sm text-muted-foreground">{student.email}</p>
-                          </div>
-                        </div>
-                        <Badge variant="outline">Student</Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div className="text-center py-8">
+                  <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">View students via attendance records</p>
+                </div>
               </CardContent>
             </Card>
 
@@ -875,7 +957,7 @@ export default function SiwesApp() {
                             <CheckCircle className="h-4 w-4 text-success" />
                           </div>
                           <div>
-                            <p className="font-medium">{record.studentName}</p>
+                            <p className="font-medium">{record.student_name}</p>
                             <p className="text-sm text-muted-foreground">{record.date} at {record.time}</p>
                           </div>
                         </div>
@@ -946,12 +1028,12 @@ export default function SiwesApp() {
                             <Building className="h-4 w-4 text-secondary" />
                           </div>
                           <div>
-                            <p className="font-medium">{assignment.studentName}</p>
+                            <p className="font-medium">{assignment.student_name}</p>
                             <p className="text-sm text-muted-foreground">{assignment.location}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <Badge variant="outline">{assignment.assignedDate}</Badge>
+                          <Badge variant="outline">{assignment.assigned_date}</Badge>
                         </div>
                       </div>
                     ))}
