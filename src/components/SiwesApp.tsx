@@ -189,27 +189,70 @@ export default function SiwesApp() {
     e.preventDefault();
     setIsLoading(true);
     
-    const { error } = await supabase.auth.signInWithPassword({
+    // First try to login
+    let { data, error } = await supabase.auth.signInWithPassword({
       email: "university@admin.com",
       password: "admin123",
     });
 
-    setIsLoading(false);
+    // If login fails because user doesn't exist, create the admin account
+    if (error && error.message.includes("Invalid login credentials")) {
+      console.log("Admin account doesn't exist, creating it...");
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: "university@admin.com",
+        password: "admin123",
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            first_name: "Admin",
+            last_name: "User",
+            role: "admin"
+          }
+        }
+      });
 
-    if (error) {
+      if (signUpError) {
+        setIsLoading(false);
+        toast({
+          title: "Admin Account Creation Failed",
+          description: signUpError.message,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Now try to login again
+      const { error: loginError } = await supabase.auth.signInWithPassword({
+        email: "university@admin.com",
+        password: "admin123",
+      });
+
+      if (loginError) {
+        setIsLoading(false);
+        toast({
+          title: "Admin Login Failed",
+          description: loginError.message,
+          variant: "destructive"
+        });
+        return;
+      }
+    } else if (error) {
+      setIsLoading(false);
       toast({
         title: "Admin Login Failed",
         description: error.message,
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: "Admin Login Successful",
-        description: "Welcome Admin!",
-        variant: "default"
-      });
-      setAdminLoginForm({ email: '', password: '' });
+      return;
     }
+
+    setIsLoading(false);
+    toast({
+      title: "Admin Login Successful",
+      description: "Welcome Admin!",
+      variant: "default"
+    });
+    setAdminLoginForm({ email: '', password: '' });
   };
 
   const handleGuestLogin = async () => {
