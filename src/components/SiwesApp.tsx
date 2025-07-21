@@ -190,7 +190,7 @@ export default function SiwesApp() {
     setIsLoading(true);
     
     const { error } = await supabase.auth.signInWithPassword({
-      email: "univerity@admin.com",
+      email: "university@admin.com",
       password: "admin123",
     });
 
