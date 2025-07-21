@@ -187,20 +187,11 @@ export default function SiwesApp() {
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminLoginForm.email || !adminLoginForm.password) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
-      });
-      return;
-    }
-
     setIsLoading(true);
     
     const { error } = await supabase.auth.signInWithPassword({
-      email: adminLoginForm.email,
-      password: adminLoginForm.password,
+      email: "univerity@admin.com",
+      password: "admin123",
     });
 
     setIsLoading(false);
@@ -212,23 +203,34 @@ export default function SiwesApp() {
         variant: "destructive"
       });
     } else {
-      // Check if user is admin
-      if (userProfile?.role !== 'admin') {
-        toast({
-          title: "Access Denied",
-          description: "Admin privileges required",
-          variant: "destructive"
-        });
-        await supabase.auth.signOut();
-        return;
-      }
-      
       toast({
         title: "Admin Login Successful",
         description: "Welcome Admin!",
         variant: "default"
       });
       setAdminLoginForm({ email: '', password: '' });
+    }
+  };
+
+  const handleGuestLogin = async () => {
+    setIsLoading(true);
+    
+    const { error } = await supabase.auth.signInAnonymously();
+
+    setIsLoading(false);
+
+    if (error) {
+      toast({
+        title: "Guest Login Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
+      toast({
+        title: "Guest Login Successful",
+        description: "Welcome Guest Student!",
+        variant: "default"
+      });
     }
   };
 
@@ -596,6 +598,30 @@ export default function SiwesApp() {
                 )}
               </Button>
             </form>
+            
+            <div className="mt-6 space-y-3 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Or</span>
+                </div>
+              </div>
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="lg" 
+                className="w-full transition-all hover:animate-pulse-glow" 
+                onClick={handleGuestLogin}
+                disabled={isLoading}
+              >
+                <User className="h-4 w-4 mr-2" />
+                Login as Guest Student
+              </Button>
+            </div>
+            
             <div className="mt-6 text-center space-y-3 animate-slide-up" style={{ animationDelay: '0.3s' }}>
               <p className="text-sm text-muted-foreground">
                 Don't have an account?{' '}
