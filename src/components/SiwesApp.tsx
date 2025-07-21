@@ -449,6 +449,37 @@ export default function SiwesApp() {
     });
   };
 
+  const handleClearAttendance = async () => {
+    if (!user || userProfile?.role !== 'admin') {
+      toast({
+        title: "Access Denied",
+        description: "Only admins can clear attendance records",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from('attendance_records')
+      .delete()
+      .gte('id', '00000000-0000-0000-0000-000000000000'); // Delete all records
+
+    if (error) {
+      toast({
+        title: "Clear Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
+      await loadAttendanceRecords(); // Reload the records
+      toast({
+        title: "Attendance Cleared",
+        description: "All attendance records have been cleared",
+        variant: "default"
+      });
+    }
+  };
+
   const handleAssignLocation = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLocation.studentName || !newLocation.location || !user) {
@@ -999,17 +1030,25 @@ export default function SiwesApp() {
             {/* Real-time Check-ins */}
             <Card className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center">
-                    <Clock className="h-5 w-5 mr-2 text-primary" />
-                    Recent Check-ins
-                  </CardTitle>
-                  <CardDescription>Latest attendance records</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center">
+                      <Clock className="h-5 w-5 mr-2 text-primary" />
+                      Recent Check-ins
+                    </CardTitle>
+                    <CardDescription>Latest attendance records</CardDescription>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button variant="outline" size="sm" onClick={handleDownloadReport}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Export CSV
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={handleClearAttendance}>
+                      <AlertCircle className="h-4 w-4 mr-2" />
+                      Clear All
+                    </Button>
+                  </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleDownloadReport}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export CSV
-                </Button>
               </CardHeader>
               <CardContent>
                 {attendanceRecords.length === 0 ? (
