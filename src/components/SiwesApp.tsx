@@ -1,28 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { format } from 'date-fns';
 import { 
   User, 
   MapPin, 
   Clock, 
   Download, 
-  UserCheck, 
-  Settings, 
+  UserPlus, 
   LogOut,
   Calendar,
   CheckCircle,
   AlertCircle,
-  Building,
   Users,
-  Star,
-  Sparkles,
-  Zap,
-  Heart
+  Activity,
+  Loader2,
+  Shield,
+  GraduationCap
 } from 'lucide-react';
 
 interface UserProfile {
@@ -31,12 +34,26 @@ interface UserProfile {
   first_name: string | null;
   last_name: string | null;
   role: 'student' | 'admin';
+  created_at: string;
+  updated_at: string;
+}
+
+interface Student {
+  id: string;
+  user_id: string;
+  full_name: string;
+  matric_number: string;
+  department: string;
+  level: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface AttendanceRecord {
   id: string;
   user_id: string;
   student_name: string;
+  matric_number?: string;
   date: string;
   time: string;
   latitude: number;
@@ -45,408 +62,365 @@ interface AttendanceRecord {
   created_at: string;
 }
 
-interface SiwesLocation {
+interface LocationAssignment {
   id: string;
-  student_name: string;
-  location: string;
-  assigned_date: string;
-  assigned_by?: string;
+  student_id: string;
+  company: string;
+  address: string;
+  supervisor: string;
+  phone: string;
   created_at: string;
+  updated_at: string;
 }
 
 export default function SiwesApp() {
-  const [currentView, setCurrentView] = useState<'login' | 'register' | 'student-home' | 'admin-home' | 'admin-login'>('login');
   const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showCelebration, setShowCelebration] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('student');
   const { toast } = useToast();
 
-  // Form states
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [adminLoginForm, setAdminLoginForm] = useState({ email: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    confirmPassword: ''
+  // Login form states
+  const [loginEmail, setLoginEmail] = useState('university@admin.com');
+  const [loginPassword, setLoginPassword] = useState('admin123');
+
+  // Student management
+  const [students, setStudents] = useState<Student[]>([]);
+  const [studentForm, setStudentForm] = useState({
+    full_name: '',
+    matric_number: '',
+    department: '',
+    level: ''
   });
 
-  // App data states
+  // Attendance tracking
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [siwesLocations, setSiwesLocations] = useState<SiwesLocation[]>([]);
-  const [newLocation, setNewLocation] = useState({ studentName: '', location: '' });
+  const [hasCheckedInToday, setHasCheckedInToday] = useState(false);
+  const [todayCheckInTime, setTodayCheckInTime] = useState('');
 
-  // Initialize auth state
+  // Location assignment
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [locationForm, setLocationForm] = useState({
+    company: '',
+    address: '',
+    supervisor: '',
+    phone: ''
+  });
+
+  // Stats
+  const [todayAttendance, setTodayAttendance] = useState(0);
+  const [attendanceRate, setAttendanceRate] = useState(0);
+
   useEffect(() => {
-    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user profile
-          setTimeout(async () => {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('user_id', session.user.id)
-              .single();
-            
-            if (profile) {
-              setUserProfile(profile as UserProfile);
-              setCurrentView(profile.role === 'admin' ? 'admin-home' : 'student-home');
-            }
-          }, 0);
-        } else {
-          setUserProfile(null);
-          setCurrentView('login');
+          await loadUserProfile(session.user.id);
+          await loadAttendanceRecords();
+          await loadStudents();
+          checkTodayAttendance(session.user.id);
         }
       }
     );
 
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-    });
-
     return () => subscription.unsubscribe();
   }, []);
 
-  // Load attendance and location data when user changes
-  useEffect(() => {
-    if (user) {
-      loadAttendanceRecords();
-      loadSiwesLocations();
+  const loadUserProfile = async (userId: string) => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      setUserProfile(profile);
+    } catch (error) {
+      console.error('Error loading profile:', error);
     }
-  }, [user]);
+  };
+
+  const loadStudents = async () => {
+    // For now, we'll skip loading students since the table doesn't exist
+    // This can be implemented later when the database is set up
+    setStudents([]);
+  };
 
   const loadAttendanceRecords = async () => {
-    if (!user) return;
-    
-    const { data, error } = await supabase
-      .from('attendance_records')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (data && !error) {
-      setAttendanceRecords(data as AttendanceRecord[]);
+    try {
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      const records = data || [];
+      setAttendanceRecords(records);
+      
+      // Calculate today's attendance
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const todayRecords = records.filter(record => record.date === today);
+      setTodayAttendance(todayRecords.length);
+      
+      // Calculate attendance rate (simplified)
+      const totalPossibleDays = 30; // Example: 30 working days
+      const rate = records.length > 0 ? Math.round((records.length / totalPossibleDays) * 100) : 0;
+      setAttendanceRate(Math.min(rate, 100));
+      
+    } catch (error) {
+      console.error('Error loading attendance:', error);
     }
   };
 
-  const loadSiwesLocations = async () => {
-    const { data, error } = await supabase
-      .from('siwes_locations')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (data && !error) {
-      setSiwesLocations(data as SiwesLocation[]);
+  const checkTodayAttendance = async (userId: string) => {
+    try {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const { data } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .single();
+      
+      if (data) {
+        setHasCheckedInToday(true);
+        setTodayCheckInTime(data.time);
+      }
+    } catch (error) {
+      // No attendance record for today
+      setHasCheckedInToday(false);
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!loginForm.email || !loginForm.password) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    
-    const { error } = await supabase.auth.signInWithPassword({
-      email: loginForm.email,
-      password: loginForm.password,
-    });
-
-    setIsLoading(false);
-
-    if (error) {
+  const handleGuestLogin = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInAnonymously();
+      
+      if (error) throw error;
+      
+      if (data.user) {
+        // Create a guest profile
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            user_id: data.user.id,
+            first_name: 'Guest',
+            last_name: 'Student',
+            role: 'student'
+          });
+        
+        if (profileError) throw profileError;
+        
+        toast({
+          title: "Welcome!",
+          description: "You're now logged in as a guest student.",
+          variant: "default"
+        });
+      }
+    } catch (error: any) {
       toast({
         title: "Login Failed",
         description: error.message,
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: "Login Successful",
-        description: "Welcome back!",
-        variant: "default"
-      });
-      setLoginForm({ email: '', password: '' });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    // First try to login
-    let { data, error } = await supabase.auth.signInWithPassword({
-      email: "university@admin.com",
-      password: "admin123",
-    });
+  const handleAdminLogin = async () => {
+    setLoading(true);
+    try {
+      // First try to sign in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      });
 
-    // If login fails because user doesn't exist, create the admin account
-    if (error && error.message.includes("Invalid login credentials")) {
-      console.log("Admin account doesn't exist, creating it...");
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: "university@admin.com",
-        password: "admin123",
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            first_name: "Admin",
-            last_name: "User",
-            role: "admin"
+      if (signInError) {
+        // If user doesn't exist, create the admin account
+        if (signInError.message.includes('Invalid login credentials')) {
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: loginEmail,
+            password: loginPassword,
+          });
+
+          if (signUpError) throw signUpError;
+
+          if (signUpData.user) {
+            // Create admin profile
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .upsert({
+                user_id: signUpData.user.id,
+                first_name: 'System',
+                last_name: 'Administrator',
+                role: 'admin'
+              });
+
+            if (profileError) throw profileError;
+
+            toast({
+              title: "Admin Account Created",
+              description: "Admin account created and logged in successfully.",
+              variant: "default"
+            });
           }
+        } else {
+          throw signInError;
         }
-      });
-
-      if (signUpError) {
-        setIsLoading(false);
+      } else {
         toast({
-          title: "Admin Account Creation Failed",
-          description: signUpError.message,
-          variant: "destructive"
+          title: "Welcome Admin",
+          description: "Successfully logged in to admin dashboard.",
+          variant: "default"
         });
-        return;
       }
-
-      // Now try to login again
-      const { error: loginError } = await supabase.auth.signInWithPassword({
-        email: "university@admin.com",
-        password: "admin123",
-      });
-
-      if (loginError) {
-        setIsLoading(false);
-        toast({
-          title: "Admin Login Failed",
-          description: loginError.message,
-          variant: "destructive"
-        });
-        return;
-      }
-    } else if (error) {
-      setIsLoading(false);
+    } catch (error: any) {
       toast({
-        title: "Admin Login Failed",
+        title: "Login Failed",
         description: error.message,
         variant: "destructive"
       });
-      return;
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setIsLoading(false);
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setUserProfile(null);
+      setStudents([]);
+      setAttendanceRecords([]);
+      setHasCheckedInToday(false);
+      
+      toast({
+        title: "Signed Out",
+        description: "You have been successfully signed out.",
+        variant: "default"
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleStudentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     toast({
-      title: "Admin Login Successful",
-      description: "Welcome Admin!",
+      title: "Feature Coming Soon",
+      description: "Student management will be available soon.",
       variant: "default"
     });
-    setAdminLoginForm({ email: '', password: '' });
-  };
-
-  const handleGuestLogin = async () => {
-    setIsLoading(true);
-    
-    const { error } = await supabase.auth.signInAnonymously();
-
-    setIsLoading(false);
-
-    if (error) {
-      toast({
-        title: "Guest Login Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    } else {
-      toast({
-        title: "Guest Login Successful",
-        description: "Welcome Guest Student!",
-        variant: "default"
-      });
-    }
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!registerForm.firstName || !registerForm.lastName || !registerForm.email || !registerForm.password || !registerForm.confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (registerForm.password !== registerForm.confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    
-    const { error } = await supabase.auth.signUp({
-      email: registerForm.email,
-      password: registerForm.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: {
-          first_name: registerForm.firstName,
-          last_name: registerForm.lastName,
-          role: 'student'
-        }
-      }
-    });
-
-    setIsLoading(false);
-
-    if (error) {
-      toast({
-        title: "Registration Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    } else {
-      toast({
-        title: "Registration Successful",
-        description: "Welcome! Please check your email to verify your account.",
-        variant: "default"
-      });
-      setRegisterForm({ firstName: '', lastName: '', email: '', password: '', confirmPassword: '' });
-    }
-  };
-
-  const handleGoogleSignUp = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/`,
-        queryParams: {
-          hd: 'student.edu' // Restrict to student emails
-        }
-      }
-    });
-
-    if (error) {
-      toast({
-        title: "Google Sign-up Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
   };
 
   const handleCheckIn = async () => {
-    if (!navigator.geolocation || !user || !userProfile) {
+    if (!navigator.geolocation) {
       toast({
-        title: "Error",
-        description: !navigator.geolocation ? "Geolocation is not supported by this browser" : "Please log in to check in",
+        title: "Location Error",
+        description: "Geolocation is not supported by this browser.",
         variant: "destructive"
       });
       return;
     }
 
-    setIsLoading(true);
+    setLoading(true);
     
     navigator.geolocation.getCurrentPosition(
       async (position) => {
-        const { latitude, longitude } = position.coords;
-        
-        const { error } = await supabase
-          .from('attendance_records')
-          .insert({
-            user_id: user.id,
-            student_name: `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim(),
-            latitude: latitude,
-            longitude: longitude,
-            location_name: `Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})`
+        try {
+          const now = new Date();
+          const attendanceData = {
+            user_id: user?.id || '',
+            student_name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Guest Student',
+            matric_number: userProfile?.matric_number || '',
+            date: format(now, 'yyyy-MM-dd'),
+            time: format(now, 'HH:mm:ss'),
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            location_name: 'Current Location'
+          };
+
+          const { error } = await supabase
+            .from('attendance_records')
+            .insert([attendanceData]);
+
+          if (error) throw error;
+
+          setHasCheckedInToday(true);
+          setTodayCheckInTime(attendanceData.time);
+          
+          toast({
+            title: "Check-in Successful!",
+            description: `Checked in at ${attendanceData.time}`,
+            variant: "default"
           });
 
-        setIsLoading(false);
-
-        if (error) {
+          await loadAttendanceRecords();
+        } catch (error: any) {
           toast({
             title: "Check-in Failed",
             description: error.message,
             variant: "destructive"
           });
-        } else {
-          // Reload attendance records
-          await loadAttendanceRecords();
-          
-          // Trigger celebration animation
-          setShowCelebration(true);
-          setTimeout(() => setShowCelebration(false), 2000);
-          
-          toast({
-            title: "Check-in Successful! 🎉",
-            description: `Location recorded: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-            variant: "default"
-          });
+        } finally {
+          setLoading(false);
         }
       },
       (error) => {
-        setIsLoading(false);
         toast({
           title: "Location Error",
-          description: "Failed to get your location. Please enable location services.",
+          description: "Unable to get your location. Please enable location services.",
           variant: "destructive"
         });
+        setLoading(false);
       }
     );
   };
 
-  const renderConfetti = () => {
-    return Array.from({ length: 20 }).map((_, i) => (
-      <div
-        key={i}
-        className={`absolute animate-confetti pointer-events-none`}
-        style={{
-          left: `${Math.random() * 100}%`,
-          animationDelay: `${Math.random() * 2}s`,
-          animationDuration: `${2 + Math.random() * 2}s`
-        }}
-      >
-        {i % 4 === 0 ? '🎉' : i % 4 === 1 ? '⭐' : i % 4 === 2 ? '🎊' : '✨'}
-      </div>
-    ));
-  };
+  const handleDownloadReport = async () => {
+    try {
+      const csvContent = [
+        ['Student Name', 'Matric Number', 'Date', 'Time', 'Latitude', 'Longitude'].join(','),
+        ...attendanceRecords.map(record => [
+          record.student_name,
+          record.matric_number || '',
+          record.date,
+          record.time,
+          record.latitude,
+          record.longitude
+        ].join(','))
+      ].join('\n');
 
-  const handleDownloadReport = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + 
-      "Student Name,Date,Time,Latitude,Longitude\n" +
-      attendanceRecords.map(record => 
-        `${record.student_name},${record.date},${record.time},${record.latitude},${record.longitude}`
-      ).join("\n");
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `attendance-report-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "attendance_report.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    toast({
-      title: "Download Complete",
-      description: "Attendance report downloaded successfully",
-      variant: "default"
-    });
+      toast({
+        title: "Report Downloaded",
+        description: "Attendance report downloaded successfully",
+        variant: "default"
+      });
+    } catch (error: any) {
+      toast({
+        title: "Download Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
   };
 
   const handleClearAttendance = async () => {
@@ -482,678 +456,534 @@ export default function SiwesApp() {
 
   const handleAssignLocation = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newLocation.studentName || !newLocation.location || !user) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const { error } = await supabase
-      .from('siwes_locations')
-      .insert({
-        student_name: newLocation.studentName,
-        location: newLocation.location,
-        assigned_by: user.id
-      });
-
-    if (error) {
-      toast({
-        title: "Assignment Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    } else {
-      await loadSiwesLocations();
-      setNewLocation({ studentName: '', location: '' });
-      
-      toast({
-        title: "Location Assigned",
-        description: `${newLocation.location} assigned to ${newLocation.studentName}`,
-        variant: "default"
-      });
-    }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
     toast({
-      title: "Logged Out",
-      description: "You have been logged out successfully",
+      title: "Feature Coming Soon",
+      description: "Location assignment will be available soon.",
       variant: "default"
     });
   };
 
-  const studentAttendance = attendanceRecords.filter(record => record.user_id === user?.id);
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
+      
+      {!user ? (
+        <div className="flex items-center justify-center min-h-screen p-4">
+          <Card className="w-full max-w-md shadow-xl">
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-4 h-20 w-20 rounded-full bg-white p-2 shadow-lg">
+                <img 
+                  src="/lovable-uploads/bdcd74c6-b4ce-411a-9a19-1281d6a1718e.png" 
+                  alt="Federal University Dutse Logo" 
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <CardTitle className="text-xl sm:text-2xl font-bold">FUD SIWES Attendance</CardTitle>
+              <CardDescription className="text-sm sm:text-base">Federal University Dutse - Track your internship attendance</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 text-xs sm:text-sm">
+                  <TabsTrigger value="student" className="text-xs sm:text-sm">Student</TabsTrigger>
+                  <TabsTrigger value="admin" className="text-xs sm:text-sm">Admin</TabsTrigger>
+                </TabsList>
 
-  // Render Admin Login Page
-  if (currentView === 'admin-login') {
-    return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-20 left-20 animate-float">
-            <Settings className="h-8 w-8 text-primary/20 animate-rotate-slow" />
-          </div>
-          <div className="absolute top-40 right-32 animate-float" style={{ animationDelay: '1s' }}>
-            <Users className="h-6 w-6 text-secondary/20 animate-pulse-glow" />
-          </div>
-          <div className="absolute bottom-32 left-32 animate-float" style={{ animationDelay: '2s' }}>
-            <Star className="h-10 w-10 text-accent/20 animate-rotate-slow" style={{ animationDirection: 'reverse' }} />
-          </div>
-          <div className="absolute bottom-20 right-20 animate-float" style={{ animationDelay: '0.5s' }}>
-            <Sparkles className="h-7 w-7 text-primary/30 animate-pulse" />
-          </div>
-        </div>
-        
-        <Card className="w-full max-w-md shadow-xl animate-bounce-in relative z-10">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 p-4 bg-gradient-primary rounded-full animate-pulse-glow">
-              <Settings className="h-8 w-8 text-primary-foreground animate-rotate-slow" />
-            </div>
-            <CardTitle className="text-3xl font-bold text-primary animate-zoom-in">Admin Login</CardTitle>
-            <CardDescription className="animate-slide-up">Sign in to admin dashboard</CardDescription>
-          </CardHeader>
-          <CardContent className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <form onSubmit={handleAdminLogin} className="space-y-4">
-              <div>
-                <Input
-                  type="email"
-                  placeholder="Admin Email"
-                  value={adminLoginForm.email}
-                  onChange={(e) => setAdminLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full transition-all duration-300 focus:animate-pulse-glow"
-                />
-              </div>
-              <div>
-                <Input
-                  type="password"
-                  placeholder="Admin Password"
-                  value={adminLoginForm.password}
-                  onChange={(e) => setAdminLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                  className="w-full transition-all duration-300 focus:animate-pulse-glow"
-                />
-              </div>
-              <Button type="submit" variant="hero" size="lg" className="w-full animate-pulse-glow" disabled={isLoading}>
-                {isLoading ? (
-                  <span className="flex items-center">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Signing In...
-                  </span>
-                ) : (
-                  <span className="flex items-center">
-                    <Zap className="h-4 w-4 mr-2" />
-                    Admin Sign In
-                  </span>
-                )}
-              </Button>
-            </form>
-            <div className="mt-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                Not an admin?{' '}
-                <button
-                  onClick={() => setCurrentView('login')}
-                  className="text-primary hover:underline font-medium transition-all hover:animate-shake"
-                >
-                  Student login
-                </button>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Render Student Login Page
-  if (currentView === 'login') {
-    return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-16 left-16 animate-float">
-            <UserCheck className="h-12 w-12 text-primary/20 animate-pulse" />
-          </div>
-          <div className="absolute top-32 right-24 animate-float" style={{ animationDelay: '1.5s' }}>
-            <Heart className="h-8 w-8 text-accent/30 animate-pulse-glow" />
-          </div>
-          <div className="absolute bottom-40 left-24 animate-float" style={{ animationDelay: '3s' }}>
-            <Sparkles className="h-10 w-10 text-secondary/25 animate-rotate-slow" />
-          </div>
-          <div className="absolute bottom-16 right-16 animate-float" style={{ animationDelay: '2s' }}>
-            <Star className="h-6 w-6 text-primary/40 animate-bounce" />
-          </div>
-          <div className="absolute top-1/2 left-8 animate-float" style={{ animationDelay: '4s' }}>
-            <Zap className="h-5 w-5 text-accent/20 animate-pulse" />
-          </div>
-          <div className="absolute top-1/2 right-8 animate-float" style={{ animationDelay: '2.5s' }}>
-            <CheckCircle className="h-7 w-7 text-success/25 animate-spin" style={{ animationDuration: '8s' }} />
-          </div>
-        </div>
-        
-        <Card className="w-full max-w-md shadow-xl animate-bounce-in relative z-10">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 p-3 bg-gradient-primary rounded-full animate-pulse-glow">
-              <UserCheck className="h-8 w-8 text-primary-foreground" />
-            </div>
-            <CardTitle className="text-3xl font-bold text-primary animate-zoom-in">SIWES Attendance</CardTitle>
-            <CardDescription className="animate-slide-up">Sign in to your account</CardDescription>
-          </CardHeader>
-          <CardContent className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <Input
-                  type="email"
-                  placeholder="Email"
-                  value={loginForm.email}
-                  onChange={(e) => setLoginForm(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full transition-all duration-300 focus:animate-pulse-glow"
-                />
-              </div>
-              <div>
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                  className="w-full transition-all duration-300 focus:animate-pulse-glow"
-                />
-              </div>
-              <Button type="submit" variant="hero" size="lg" className="w-full animate-pulse-glow" disabled={isLoading}>
-                {isLoading ? (
-                  <span className="flex items-center">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Signing In...
-                  </span>
-                ) : (
-                  "Sign In"
-                )}
-              </Button>
-            </form>
-            
-            <div className="mt-6 space-y-3 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or</span>
-                </div>
-              </div>
-              
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="lg" 
-                className="w-full transition-all hover:animate-pulse-glow" 
-                onClick={handleGuestLogin}
-                disabled={isLoading}
-              >
-                <User className="h-4 w-4 mr-2" />
-                Login as Guest Student
-              </Button>
-            </div>
-            
-            <div className="mt-6 text-center space-y-3 animate-slide-up" style={{ animationDelay: '0.3s' }}>
-              <p className="text-sm text-muted-foreground">
-                Don't have an account?{' '}
-                <button
-                  onClick={() => setCurrentView('register')}
-                  className="text-primary hover:underline font-medium transition-all hover:animate-shake"
-                >
-                  Register here
-                </button>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Are you an admin?{' '}
-                <button
-                  onClick={() => setCurrentView('admin-login')}
-                  className="text-primary hover:underline font-medium transition-all hover:animate-shake"
-                >
-                  Admin login
-                </button>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Render Register Page
-  if (currentView === 'register') {
-    return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-20 left-16 animate-float">
-            <User className="h-10 w-10 text-primary/20 animate-bounce" />
-          </div>
-          <div className="absolute top-1/3 right-12 animate-float" style={{ animationDelay: '2s' }}>
-            <Sparkles className="h-8 w-8 text-accent/25 animate-pulse-glow" />
-          </div>
-          <div className="absolute bottom-1/4 left-12 animate-float" style={{ animationDelay: '1s' }}>
-            <Heart className="h-6 w-6 text-secondary/30 animate-pulse" />
-          </div>
-          <div className="absolute bottom-16 right-24 animate-float" style={{ animationDelay: '3s' }}>
-            <CheckCircle className="h-9 w-9 text-success/20 animate-rotate-slow" />
-          </div>
-        </div>
-        
-        <Card className="w-full max-w-md shadow-xl animate-bounce-in relative z-10">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 p-3 bg-gradient-secondary rounded-full animate-pulse-glow">
-              <User className="h-8 w-8 text-secondary-foreground" />
-            </div>
-            <CardTitle className="text-3xl font-bold text-primary animate-zoom-in">Create Account</CardTitle>
-            <CardDescription className="animate-slide-up">Register for SIWES Attendance</CardDescription>
-          </CardHeader>
-          <CardContent className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <Input
-                  type="text"
-                  placeholder="First Name"
-                  value={registerForm.firstName}
-                  onChange={(e) => setRegisterForm(prev => ({ ...prev, firstName: e.target.value }))}
-                  className="w-full"
-                />
-              </div>
-              <div>
-                <Input
-                  type="text"
-                  placeholder="Last Name"
-                  value={registerForm.lastName}
-                  onChange={(e) => setRegisterForm(prev => ({ ...prev, lastName: e.target.value }))}
-                  className="w-full"
-                />
-              </div>
-              <div>
-                <Input
-                  type="email"
-                  placeholder="Student Email"
-                  value={registerForm.email}
-                  onChange={(e) => setRegisterForm(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full"
-                />
-              </div>
-              <div>
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm(prev => ({ ...prev, password: e.target.value }))}
-                  className="w-full"
-                />
-              </div>
-              <div>
-                <Input
-                  type="password"
-                  placeholder="Confirm Password"
-                  value={registerForm.confirmPassword}
-                  onChange={(e) => setRegisterForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                  className="w-full"
-                />
-              </div>
-              <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isLoading}>
-                {isLoading ? "Creating Account..." : "Create Account"}
-              </Button>
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or</span>
-                </div>
-              </div>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="lg" 
-                className="w-full transition-all hover:animate-pulse-glow" 
-                onClick={handleGoogleSignUp}
-              >
-                <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24">
-                  <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                Sign up with Google
-              </Button>
-            </form>
-            <div className="mt-6 text-center animate-slide-up" style={{ animationDelay: '0.4s' }}>
-              <p className="text-sm text-muted-foreground">
-                Already have an account?{' '}
-                <button
-                  onClick={() => setCurrentView('login')}
-                  className="text-primary hover:underline font-medium transition-all hover:animate-shake"
-                >
-                  Sign in here
-                </button>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Render Student Dashboard
-  if (currentView === 'student-home') {
-    return (
-      <div className="min-h-screen bg-background relative">
-        {/* Celebration Animation Overlay */}
-        {showCelebration && (
-          <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
-            {renderConfetti()}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="animate-celebration text-6xl">🎉</div>
-            </div>
-          </div>
-        )}
-        {/* Header */}
-        <header className="bg-gradient-primary text-primary-foreground shadow-lg">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-4">
-              <div className="flex items-center space-x-3">
-                <UserCheck className="h-8 w-8" />
-                <div>
-                  <h1 className="text-xl font-bold">SIWES Attendance</h1>
-                  <p className="text-sm opacity-90">Student Dashboard</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="font-medium">{userProfile?.first_name} {userProfile?.last_name}</p>
-                  <p className="text-sm opacity-90">{user?.email}</p>
-                </div>
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-white/10">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </Button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Check-in Section */}
-            <div className="lg:col-span-1">
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <MapPin className="h-5 w-5 mr-2 text-primary" />
-                    Check-in
-                  </CardTitle>
-                  <CardDescription>Record your attendance with location</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
+                <TabsContent value="student" className="space-y-4">
                   <Button 
-                    variant="hero" 
-                    size="lg" 
-                    className={`w-full transition-all duration-300 ${showCelebration ? 'animate-celebration' : 'hover:animate-pulse-glow'}`}
-                    onClick={handleCheckIn}
-                    disabled={isLoading}
+                    onClick={handleGuestLogin} 
+                    className="w-full h-12 text-sm sm:text-base"
+                    disabled={loading}
                   >
-                    {isLoading ? (
-                      <span className="flex items-center">
-                        <MapPin className="h-4 w-4 mr-2 animate-pulse" />
-                        Getting Location...
-                      </span>
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span className="hidden sm:inline">Signing in...</span>
+                        <span className="sm:hidden">Signing in...</span>
+                      </>
                     ) : (
-                      <span className="flex items-center">
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Check In Now
-                      </span>
+                      <>
+                        <User className="mr-2 h-4 w-4" />
+                        <span className="hidden sm:inline">Continue as Student</span>
+                        <span className="sm:hidden">Student Login</span>
+                      </>
                     )}
                   </Button>
-                  
-                  {studentAttendance.length > 0 && (
-                    <div className="p-4 bg-success-light rounded-lg">
-                      <div className="flex items-center text-success mb-2">
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        <span className="font-medium">Last Check-in</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {studentAttendance[0].date} at {studentAttendance[0].time}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Location: {studentAttendance[0].latitude.toFixed(4)}, {studentAttendance[0].longitude.toFixed(4)}
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                </TabsContent>
 
-            {/* Attendance History */}
-            <div className="lg:col-span-2">
-              <Card className="shadow-lg">
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <Calendar className="h-5 w-5 mr-2 text-primary" />
-                    Attendance History
-                  </CardTitle>
-                  <CardDescription>Your check-in records</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {studentAttendance.length === 0 ? (
-                    <div className="text-center py-8">
-                      <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No attendance records yet</p>
-                      <p className="text-sm text-muted-foreground mt-2">Check in to start recording your attendance</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {studentAttendance.map((record) => (
-                        <div key={record.id} className="flex items-center justify-between p-4 border rounded-lg">
-                          <div className="flex items-center space-x-3">
-                            <div className="bg-success-light p-2 rounded-full">
-                              <CheckCircle className="h-4 w-4 text-success" />
-                            </div>
-                            <div>
-                              <p className="font-medium">{record.date}</p>
-                              <p className="text-sm text-muted-foreground">{record.time}</p>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <Badge variant="secondary">
-                              <MapPin className="h-3 w-3 mr-1" />
-                              {record.latitude.toFixed(4)}, {record.longitude.toFixed(4)}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Render Admin Dashboard
-  if (currentView === 'admin-home') {
-    return (
-      <div className="min-h-screen bg-background">
-        {/* Header */}
-        <header className="bg-gradient-primary text-primary-foreground shadow-lg">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-4">
-              <div className="flex items-center space-x-3">
-                <Settings className="h-8 w-8" />
-                <div>
-                  <h1 className="text-xl font-bold">SIWES Attendance</h1>
-                  <p className="text-sm opacity-90">Admin Dashboard</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="font-medium">{userProfile?.first_name} {userProfile?.last_name}</p>
-                  <p className="text-sm opacity-90">{user?.email}</p>
-                </div>
-                <Button variant="ghost" size="sm" onClick={handleLogout} className="text-primary-foreground hover:bg-white/10">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </Button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Students List */}
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Users className="h-5 w-5 mr-2 text-primary" />
-                  Registered Students
-                </CardTitle>
-                <CardDescription>List of all students in the system</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-8">
-                  <User className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">View students via attendance records</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Real-time Check-ins */}
-            <Card className="shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center">
-                      <Clock className="h-5 w-5 mr-2 text-primary" />
-                      Recent Check-ins
-                    </CardTitle>
-                    <CardDescription>Latest attendance records</CardDescription>
+                <TabsContent value="admin" className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-sm">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="university@admin.com"
+                      className="h-10 text-sm"
+                    />
                   </div>
-                  <div className="flex space-x-2">
-                    <Button variant="outline" size="sm" onClick={handleDownloadReport}>
-                      <Download className="h-4 w-4 mr-2" />
-                      Export CSV
-                    </Button>
-                    <Button variant="destructive" size="sm" onClick={handleClearAttendance}>
-                      <AlertCircle className="h-4 w-4 mr-2" />
-                      Clear All
-                    </Button>
+                  <div className="space-y-2">
+                    <Label htmlFor="password" className="text-sm">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="h-10 text-sm"
+                    />
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {attendanceRecords.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No check-ins yet</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {attendanceRecords.slice(0, 10).map((record) => (
-                      <div key={record.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div className="bg-success-light p-2 rounded-full">
-                            <CheckCircle className="h-4 w-4 text-success" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{record.student_name}</p>
-                            <p className="text-sm text-muted-foreground">{record.date} at {record.time}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <Badge variant="secondary">
-                            <MapPin className="h-3 w-3 mr-1" />
-                            {record.latitude.toFixed(4)}, {record.longitude.toFixed(4)}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Assign SIWES Locations */}
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Building className="h-5 w-5 mr-2 text-primary" />
-                  Assign SIWES Locations
-                </CardTitle>
-                <CardDescription>Assign placement locations to students</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <form onSubmit={handleAssignLocation} className="space-y-4">
-                  <Input
-                    type="text"
-                    placeholder="Student Name"
-                    value={newLocation.studentName}
-                    onChange={(e) => setNewLocation(prev => ({ ...prev, studentName: e.target.value }))}
-                  />
-                  <Input
-                    type="text"
-                    placeholder="Company/Organization Location"
-                    value={newLocation.location}
-                    onChange={(e) => setNewLocation(prev => ({ ...prev, location: e.target.value }))}
-                  />
-                  <Button type="submit" variant="secondary" className="w-full">
-                    Assign Location
+                  <Button 
+                    onClick={handleAdminLogin} 
+                    className="w-full h-12 text-sm sm:text-base"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <span className="hidden sm:inline">Signing in...</span>
+                        <span className="sm:hidden">Signing in...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Shield className="mr-2 h-4 w-4" />
+                        <span className="hidden sm:inline">Admin Login</span>
+                        <span className="sm:hidden">Admin</span>
+                      </>
+                    )}
                   </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            {/* Assigned Locations */}
-            <Card className="shadow-lg">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <MapPin className="h-5 w-5 mr-2 text-primary" />
-                  Assigned Locations
-                </CardTitle>
-                <CardDescription>Current student placements</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {siwesLocations.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Building className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No locations assigned yet</p>
+                  <div className="text-xs text-muted-foreground text-center space-y-1">
+                    <p>Demo Admin Credentials:</p>
+                    <p>Email: university@admin.com</p>
+                    <p>Password: admin123</p>
                   </div>
-                ) : (
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
-                    {siwesLocations.map((assignment) => (
-                      <div key={assignment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <div className="bg-secondary-light p-2 rounded-full">
-                            <Building className="h-4 w-4 text-secondary" />
-                          </div>
-                          <div>
-                            <p className="font-medium">{assignment.student_name}</p>
-                            <p className="text-sm text-muted-foreground">{assignment.location}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <Badge variant="outline">{assignment.assigned_date}</Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </div>
-      </div>
-    );
-  }
+      ) : (
+        <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
+          {/* Header */}
+          <header className="bg-white shadow-sm border-b sticky top-0 z-50">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="flex justify-between items-center h-16">
+                <div className="flex items-center">
+                  <div className="h-8 w-8 mr-3 rounded-full bg-white p-1 shadow-sm">
+                    <img 
+                      src="/lovable-uploads/bdcd74c6-b4ce-411a-9a19-1281d6a1718e.png" 
+                      alt="FUD Logo" 
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <h1 className="text-lg sm:text-2xl font-bold text-gray-900 hidden sm:block">FUD SIWES Attendance</h1>
+                  <h1 className="text-lg font-bold text-gray-900 sm:hidden">FUD SIWES</h1>
+                </div>
+                <div className="flex items-center space-x-2 sm:space-x-4">
+                  <span className="text-xs sm:text-sm text-gray-600 hidden md:block">
+                    Welcome, {userProfile?.role === 'admin' ? 'Admin' : `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Student'}
+                  </span>
+                  <Button variant="outline" size="sm" onClick={handleSignOut} className="text-xs sm:text-sm">
+                    <LogOut className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Sign Out</span>
+                    <span className="sm:hidden">Out</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </header>
 
-  return null;
+          <main className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+            {userProfile?.role === 'admin' ? (
+              /* Admin Dashboard */
+              <div className="space-y-4 sm:space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Admin Dashboard</h2>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                    <span className="text-xs sm:text-sm text-muted-foreground">
+                      {format(new Date(), 'EEEE, MMMM dd, yyyy')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                  <Card className="shadow-lg">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Total Students</CardTitle>
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-xl sm:text-2xl font-bold">{students.length}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Active this session
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="shadow-lg">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Today's Check-ins</CardTitle>
+                      <Clock className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-xl sm:text-2xl font-bold">{todayAttendance}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Students checked in today
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="shadow-lg sm:col-span-2 lg:col-span-1">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                      <CardTitle className="text-sm font-medium">Attendance Rate</CardTitle>
+                      <Activity className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-xl sm:text-2xl font-bold">{attendanceRate}%</div>
+                      <p className="text-xs text-muted-foreground">
+                        Overall attendance
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Student Management */}
+                  <Card className="shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="flex items-center text-lg">
+                        <UserPlus className="h-5 w-5 mr-2 text-primary" />
+                        Student Management
+                      </CardTitle>
+                      <CardDescription className="text-sm">Add and manage student profiles</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleStudentSubmit} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="studentName" className="text-sm">Full Name</Label>
+                            <Input
+                              id="studentName"
+                              value={studentForm.full_name}
+                              onChange={(e) => setStudentForm({...studentForm, full_name: e.target.value})}
+                              placeholder="Enter student name"
+                              className="text-sm"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="matricNumber" className="text-sm">Matric Number</Label>
+                            <Input
+                              id="matricNumber"
+                              value={studentForm.matric_number}
+                              onChange={(e) => setStudentForm({...studentForm, matric_number: e.target.value})}
+                              placeholder="e.g., FUD/CSC/19/1234"
+                              className="text-sm"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="department" className="text-sm">Department</Label>
+                            <Input
+                              id="department"
+                              value={studentForm.department}
+                              onChange={(e) => setStudentForm({...studentForm, department: e.target.value})}
+                              placeholder="e.g., Computer Science"
+                              className="text-sm"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="level" className="text-sm">Level</Label>
+                            <Select value={studentForm.level} onValueChange={(value) => setStudentForm({...studentForm, level: value})}>
+                              <SelectTrigger className="text-sm">
+                                <SelectValue placeholder="Select level" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="200">200 Level</SelectItem>
+                                <SelectItem value="300">300 Level</SelectItem>
+                                <SelectItem value="400">400 Level</SelectItem>
+                                <SelectItem value="500">500 Level</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <Button type="submit" className="w-full text-sm" disabled={loading}>
+                          {loading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              <span className="hidden sm:inline">Adding Student...</span>
+                              <span className="sm:hidden">Adding...</span>
+                            </>
+                          ) : (
+                            <>
+                              <UserPlus className="mr-2 h-4 w-4" />
+                              <span className="hidden sm:inline">Add Student</span>
+                              <span className="sm:hidden">Add</span>
+                            </>
+                          )}
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+
+                  {/* Location Assignment */}
+                  <Card className="shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="flex items-center text-lg">
+                        <MapPin className="h-5 w-5 mr-2 text-primary" />
+                        Location Assignment
+                      </CardTitle>
+                      <CardDescription className="text-sm">Assign students to industry locations</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleAssignLocation} className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="studentSelect" className="text-sm">Select Student</Label>
+                          <Select 
+                            value={selectedStudentId} 
+                            onValueChange={setSelectedStudentId}
+                            required
+                          >
+                            <SelectTrigger className="text-sm">
+                              <SelectValue placeholder="Choose a student" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {students.map((student) => (
+                                <SelectItem key={student.id} value={student.id} className="text-sm">
+                                  {student.full_name} ({student.matric_number})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="company" className="text-sm">Company/Organization</Label>
+                          <Input
+                            id="company"
+                            value={locationForm.company}
+                            onChange={(e) => setLocationForm({...locationForm, company: e.target.value})}
+                            placeholder="e.g., MTN Nigeria"
+                            className="text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="address" className="text-sm">Address</Label>
+                          <Textarea
+                            id="address"
+                            value={locationForm.address}
+                            onChange={(e) => setLocationForm({...locationForm, address: e.target.value})}
+                            placeholder="Complete address of the organization"
+                            className="min-h-[60px] sm:min-h-[80px] text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="supervisor" className="text-sm">Supervisor</Label>
+                            <Input
+                              id="supervisor"
+                              value={locationForm.supervisor}
+                              onChange={(e) => setLocationForm({...locationForm, supervisor: e.target.value})}
+                              placeholder="Supervisor name"
+                              className="text-sm"
+                              required
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="phone" className="text-sm">Phone</Label>
+                            <Input
+                              id="phone"
+                              value={locationForm.phone}
+                              onChange={(e) => setLocationForm({...locationForm, phone: e.target.value})}
+                              placeholder="Contact number"
+                              className="text-sm"
+                              required
+                            />
+                          </div>
+                        </div>
+                        <Button type="submit" className="w-full text-sm" disabled={loading}>
+                          {loading ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              <span className="hidden sm:inline">Assigning Location...</span>
+                              <span className="sm:hidden">Assigning...</span>
+                            </>
+                          ) : (
+                            <>
+                              <MapPin className="mr-2 h-4 w-4" />
+                              <span className="hidden sm:inline">Assign Location</span>
+                              <span className="sm:hidden">Assign</span>
+                            </>
+                          )}
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Real-time Check-ins */}
+                <Card className="shadow-lg">
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <CardTitle className="flex items-center text-lg">
+                          <Clock className="h-5 w-5 mr-2 text-primary" />
+                          Recent Check-ins
+                        </CardTitle>
+                        <CardDescription className="text-sm">Latest attendance records</CardDescription>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Button variant="outline" size="sm" onClick={handleDownloadReport} className="text-xs sm:text-sm">
+                          <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                          <span className="hidden sm:inline">Export CSV</span>
+                          <span className="sm:hidden">Export</span>
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={handleClearAttendance} className="text-xs sm:text-sm">
+                          <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                          <span className="hidden sm:inline">Clear All</span>
+                          <span className="sm:hidden">Clear</span>
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {attendanceRecords.length === 0 ? (
+                      <div className="text-center py-8">
+                        <Clock className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">No check-ins yet</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {attendanceRecords.slice(0, 10).map((record) => (
+                          <div key={record.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg gap-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="bg-green-100 p-2 rounded-full">
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm sm:text-base">{record.student_name}</p>
+                                <p className="text-xs sm:text-sm text-muted-foreground">{record.date} at {record.time}</p>
+                              </div>
+                            </div>
+                            <div className="text-left sm:text-right">
+                              <Badge variant="secondary" className="text-xs">
+                                <MapPin className="h-3 w-3 mr-1" />
+                                {record.latitude.toFixed(4)}, {record.longitude.toFixed(4)}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              /* Student Dashboard */
+              <div className="space-y-4 sm:space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Student Dashboard</h2>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                    <span className="text-xs sm:text-sm text-muted-foreground">
+                      {format(new Date(), 'EEEE, MMMM dd, yyyy')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Quick Check-in */}
+                  <Card className="shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="flex items-center text-lg">
+                        <Clock className="h-5 w-5 mr-2 text-primary" />
+                        Quick Check-in
+                      </CardTitle>
+                      <CardDescription className="text-sm">Mark your attendance for today</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <Button 
+                        onClick={handleCheckIn} 
+                        disabled={loading || hasCheckedInToday}
+                        className="w-full h-12 text-sm sm:text-base"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                            <span className="hidden sm:inline">Checking in...</span>
+                            <span className="sm:hidden">Checking...</span>
+                          </>
+                        ) : hasCheckedInToday ? (
+                          <>
+                            <CheckCircle className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                            <span className="hidden sm:inline">Already Checked In</span>
+                            <span className="sm:hidden">Checked In</span>
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+                            <span className="hidden sm:inline">Check In Now</span>
+                            <span className="sm:hidden">Check In</span>
+                          </>
+                        )}
+                      </Button>
+                      {hasCheckedInToday && (
+                        <p className="mt-2 text-xs sm:text-sm text-green-600 text-center">
+                          You checked in today at {todayCheckInTime}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* My Attendance */}
+                  <Card className="shadow-lg">
+                    <CardHeader>
+                      <CardTitle className="flex items-center text-lg">
+                        <Activity className="h-5 w-5 mr-2 text-primary" />
+                        My Attendance
+                      </CardTitle>
+                      <CardDescription className="text-sm">Your attendance history</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3 max-h-64 overflow-y-auto">
+                        {attendanceRecords
+                          .filter(record => record.user_id === user?.id)
+                          .slice(0, 5)
+                          .map((record) => (
+                            <div key={record.id} className="flex items-center justify-between p-3 border rounded-lg">
+                              <div className="flex items-center space-x-3">
+                                <div className="bg-green-100 p-2 rounded-full">
+                                  <CheckCircle className="h-3 w-3 text-green-600" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium">{record.date}</p>
+                                  <p className="text-xs text-muted-foreground">{record.time}</p>
+                                </div>
+                              </div>
+                              <Badge variant="secondary" className="text-xs">
+                                Present
+                              </Badge>
+                            </div>
+                          ))}
+                        {attendanceRecords.filter(record => record.user_id === user?.id).length === 0 && (
+                          <div className="text-center py-4">
+                            <p className="text-sm text-muted-foreground">No attendance records yet</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+      )}
+    </div>
+  );
 }
