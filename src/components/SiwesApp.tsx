@@ -136,7 +136,7 @@ export default function SiwesApp() {
         .eq('user_id', userId)
         .single();
       
-      setUserProfile(profile);
+      setUserProfile(profile as UserProfile);
     } catch (error) {
       console.error('Error loading profile:', error);
     }
@@ -342,7 +342,7 @@ export default function SiwesApp() {
           const attendanceData = {
             user_id: user?.id || '',
             student_name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Guest Student',
-            matric_number: userProfile?.matric_number || '',
+            
             date: format(now, 'yyyy-MM-dd'),
             time: format(now, 'HH:mm:ss'),
             latitude: position.coords.latitude,
