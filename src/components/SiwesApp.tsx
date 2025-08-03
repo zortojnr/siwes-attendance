@@ -402,13 +402,27 @@ export default function SiwesApp() {
   };
 
   const handleSignOut = async () => {
+    setLoading(true);
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      
+      // Clear all state
       setUser(null);
       setUserProfile(null);
       setStudents([]);
       setAttendanceRecords([]);
       setHasCheckedInToday(false);
+      setTodayCheckInTime('');
+      setTodayAttendance(0);
+      setAttendanceRate(0);
+      
+      // Clear form states
+      setStudentId('');
+      setStudentPassword('');
+      setStudentFirstName('');
+      setStudentLastName('');
+      setShowStudentRegister(false);
       
       toast({
         title: "Signed Out",
@@ -416,11 +430,14 @@ export default function SiwesApp() {
         variant: "default"
       });
     } catch (error: any) {
+      console.error('Sign out error:', error);
       toast({
-        title: "Error",
-        description: error.message,
+        title: "Sign Out Error",
+        description: error.message || "Failed to sign out. Please try again.",
         variant: "destructive"
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -443,16 +460,35 @@ export default function SiwesApp() {
       return;
     }
 
+    if (hasCheckedInToday) {
+      toast({
+        title: "Already Checked In",
+        description: `You already checked in today at ${todayCheckInTime}`,
+        variant: "default"
+      });
+      return;
+    }
+
     setLoading(true);
+    
+    // Add timeout for geolocation
+    const timeoutId = setTimeout(() => {
+      toast({
+        title: "Location Timeout",
+        description: "Location request timed out. Please try again.",
+        variant: "destructive"
+      });
+      setLoading(false);
+    }, 10000); // 10 second timeout
     
     navigator.geolocation.getCurrentPosition(
       async (position) => {
+        clearTimeout(timeoutId);
         try {
           const now = new Date();
           const attendanceData = {
             user_id: user?.id || '',
-            student_name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Guest Student',
-            
+            student_name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Student',
             date: format(now, 'yyyy-MM-dd'),
             time: format(now, 'HH:mm:ss'),
             latitude: position.coords.latitude,
@@ -475,11 +511,13 @@ export default function SiwesApp() {
             variant: "default"
           });
 
+          // Reload attendance records to update the list
           await loadAttendanceRecords();
         } catch (error: any) {
+          console.error('Check-in error:', error);
           toast({
             title: "Check-in Failed",
-            description: error.message,
+            description: error.message || "Failed to record attendance. Please try again.",
             variant: "destructive"
           });
         } finally {
@@ -487,12 +525,19 @@ export default function SiwesApp() {
         }
       },
       (error) => {
+        clearTimeout(timeoutId);
+        console.error('Geolocation error:', error);
         toast({
           title: "Location Error",
-          description: "Unable to get your location. Please enable location services.",
+          description: "Unable to get your location. Please enable location services and try again.",
           variant: "destructive"
         });
         setLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 60000
       }
     );
   };
