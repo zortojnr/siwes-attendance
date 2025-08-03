@@ -34,6 +34,7 @@ interface UserProfile {
   first_name: string | null;
   last_name: string | null;
   role: 'student' | 'admin';
+  student_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -83,6 +84,13 @@ export default function SiwesApp() {
   // Login form states
   const [loginEmail, setLoginEmail] = useState('university@admin.com');
   const [loginPassword, setLoginPassword] = useState('admin123');
+  
+  // Student login/registration states
+  const [studentId, setStudentId] = useState('');
+  const [studentPassword, setStudentPassword] = useState('');
+  const [studentFirstName, setStudentFirstName] = useState('');
+  const [studentLastName, setStudentLastName] = useState('');
+  const [showStudentRegister, setShowStudentRegister] = useState(false);
 
   // Student management
   const [students, setStudents] = useState<Student[]>([]);
@@ -291,6 +299,108 @@ export default function SiwesApp() {
     }
   };
 
+  const handleStudentRegister = async () => {
+    if (!studentId || !studentPassword || !studentFirstName || !studentLastName) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Create email from student ID
+      const email = `${studentId}@student.fud.edu.ng`;
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password: studentPassword,
+        options: {
+          data: {
+            first_name: studentFirstName,
+            last_name: studentLastName,
+            role: 'student',
+            student_id: studentId
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Registration Successful!",
+        description: "Your account has been created. You can now log in.",
+        variant: "default"
+      });
+
+      setShowStudentRegister(false);
+      // Clear form
+      setStudentId('');
+      setStudentPassword('');
+      setStudentFirstName('');
+      setStudentLastName('');
+    } catch (error: any) {
+      toast({
+        title: "Registration Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStudentLogin = async () => {
+    if (!studentId || !studentPassword) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter your Student ID and password",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Convert student ID to email format
+      const email = `${studentId}@student.fud.edu.ng`;
+      
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: studentPassword,
+      });
+
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          toast({
+            title: "Login Failed",
+            description: "Invalid Student ID or password. Please register first if you don't have an account.",
+            variant: "destructive"
+          });
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast({
+        title: "Welcome Student!",
+        description: "Successfully logged in to your dashboard.",
+        variant: "default"
+      });
+    } catch (error: any) {
+      toast({
+        title: "Login Failed",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -488,25 +598,145 @@ export default function SiwesApp() {
                 </TabsList>
 
                 <TabsContent value="student" className="space-y-4">
-                  <Button 
-                    onClick={handleGuestLogin} 
-                    className="w-full h-12 text-sm sm:text-base"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        <span className="hidden sm:inline">Signing in...</span>
-                        <span className="sm:hidden">Signing in...</span>
-                      </>
-                    ) : (
-                      <>
-                        <User className="mr-2 h-4 w-4" />
-                        <span className="hidden sm:inline">Continue as Student</span>
-                        <span className="sm:hidden">Student Login</span>
-                      </>
-                    )}
-                  </Button>
+                  {!showStudentRegister ? (
+                    // Student Login Form
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="studentId" className="text-sm">Student ID</Label>
+                        <Input
+                          id="studentId"
+                          type="text"
+                          value={studentId}
+                          onChange={(e) => setStudentId(e.target.value)}
+                          placeholder="e.g., FUD/CSC/20/1234"
+                          className="h-10 text-sm"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="studentPassword" className="text-sm">Password</Label>
+                        <Input
+                          id="studentPassword"
+                          type="password"
+                          value={studentPassword}
+                          onChange={(e) => setStudentPassword(e.target.value)}
+                          placeholder="Enter your password"
+                          className="h-10 text-sm"
+                          required
+                        />
+                      </div>
+                      <Button 
+                        onClick={handleStudentLogin} 
+                        className="w-full h-12 text-sm sm:text-base"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <span className="hidden sm:inline">Signing in...</span>
+                            <span className="sm:hidden">Signing in...</span>
+                          </>
+                        ) : (
+                          <>
+                            <GraduationCap className="mr-2 h-4 w-4" />
+                            <span className="hidden sm:inline">Student Login</span>
+                            <span className="sm:hidden">Login</span>
+                          </>
+                        )}
+                      </Button>
+                      <div className="text-center">
+                        <Button 
+                          variant="link" 
+                          onClick={() => setShowStudentRegister(true)}
+                          className="text-xs sm:text-sm text-muted-foreground"
+                        >
+                          Don't have an account? Register here
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    // Student Registration Form
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="regStudentId" className="text-sm">Student ID</Label>
+                        <Input
+                          id="regStudentId"
+                          type="text"
+                          value={studentId}
+                          onChange={(e) => setStudentId(e.target.value)}
+                          placeholder="e.g., FUD/CSC/20/1234"
+                          className="h-10 text-sm"
+                          required
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="firstName" className="text-sm">First Name</Label>
+                          <Input
+                            id="firstName"
+                            type="text"
+                            value={studentFirstName}
+                            onChange={(e) => setStudentFirstName(e.target.value)}
+                            placeholder="Enter first name"
+                            className="h-10 text-sm"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="lastName" className="text-sm">Last Name</Label>
+                          <Input
+                            id="lastName"
+                            type="text"
+                            value={studentLastName}
+                            onChange={(e) => setStudentLastName(e.target.value)}
+                            placeholder="Enter last name"
+                            className="h-10 text-sm"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="regPassword" className="text-sm">Password</Label>
+                        <Input
+                          id="regPassword"
+                          type="password"
+                          value={studentPassword}
+                          onChange={(e) => setStudentPassword(e.target.value)}
+                          placeholder="Create a password"
+                          className="h-10 text-sm"
+                          required
+                        />
+                      </div>
+                      <Button 
+                        onClick={handleStudentRegister} 
+                        className="w-full h-12 text-sm sm:text-base"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <span className="hidden sm:inline">Creating Account...</span>
+                            <span className="sm:hidden">Creating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="mr-2 h-4 w-4" />
+                            <span className="hidden sm:inline">Create Account</span>
+                            <span className="sm:hidden">Register</span>
+                          </>
+                        )}
+                      </Button>
+                      <div className="text-center">
+                        <Button 
+                          variant="link" 
+                          onClick={() => setShowStudentRegister(false)}
+                          className="text-xs sm:text-sm text-muted-foreground"
+                        >
+                          Already have an account? Login here
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="admin" className="space-y-4">
