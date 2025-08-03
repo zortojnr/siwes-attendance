@@ -81,6 +81,30 @@ export default function SiwesApp() {
   const [activeTab, setActiveTab] = useState('student');
   const { toast } = useToast();
 
+  // Popular locations in Nigeria
+  const popularLocations = [
+    'Victoria Island, Lagos State',
+    'Ikeja, Lagos State', 
+    'Lagos Island, Lagos State',
+    'Abuja Central Business District, FCT',
+    'Wuse 2, Abuja, FCT',
+    'Garki, Abuja, FCT',
+    'Port Harcourt, Rivers State',
+    'Kano, Kano State',
+    'Ibadan, Oyo State',
+    'Benin City, Edo State',
+    'Kaduna, Kaduna State',
+    'Jos, Plateau State',
+    'Calabar, Cross River State',
+    'Warri, Delta State',
+    'Enugu, Enugu State',
+    'Aba, Abia State',
+    'Maiduguri, Borno State',
+    'Ilorin, Kwara State',
+    'Akure, Ondo State',
+    'Uyo, Akwa Ibom State'
+  ];
+
   // Login form states
   const [loginEmail, setLoginEmail] = useState('university@admin.com');
   const [loginPassword, setLoginPassword] = useState('admin123');
@@ -588,24 +612,39 @@ export default function SiwesApp() {
       return;
     }
 
-    const { error } = await supabase
-      .from('attendance_records')
-      .delete()
-      .gte('id', '00000000-0000-0000-0000-000000000000'); // Delete all records
+    setLoading(true);
+    try {
+      // Delete all attendance records from the database
+      const { error } = await supabase
+        .from('attendance_records')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // This condition ensures all records are deleted
 
-    if (error) {
-      toast({
-        title: "Clear Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    } else {
-      await loadAttendanceRecords(); // Reload the records
+      if (error) throw error;
+
+      // Clear local state immediately
+      setAttendanceRecords([]);
+      setTodayAttendance(0);
+      setAttendanceRate(0);
+      setHasCheckedInToday(false);
+      setTodayCheckInTime('');
+
       toast({
         title: "Attendance Cleared",
-        description: "All attendance records have been cleared",
+        description: "All attendance records have been cleared successfully",
         variant: "default"
       });
+    } catch (error: any) {
+      console.error('Clear attendance error:', error);
+      toast({
+        title: "Clear Failed",
+        description: error.message || "Failed to clear attendance records",
+        variant: "destructive"
+      });
+      // Reload records in case of error to ensure UI is consistent
+      await loadAttendanceRecords();
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1046,13 +1085,31 @@ export default function SiwesApp() {
                             required
                           />
                         </div>
+                        {/* Popular Locations */}
+                        <div className="space-y-2">
+                          <Label className="text-sm">Popular Locations</Label>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-32 overflow-y-auto p-2 border rounded-md">
+                            {popularLocations.map((location, index) => (
+                              <Button
+                                key={index}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="justify-start text-left h-auto py-2 px-3 text-xs"
+                                onClick={() => setLocationForm({...locationForm, address: location})}
+                              >
+                                {location}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
                         <div className="space-y-2">
                           <Label htmlFor="address" className="text-sm">Address</Label>
                           <Textarea
                             id="address"
                             value={locationForm.address}
                             onChange={(e) => setLocationForm({...locationForm, address: e.target.value})}
-                            placeholder="Complete address of the organization"
+                            placeholder="Complete address or select from popular locations above"
                             className="min-h-[60px] sm:min-h-[80px] text-sm"
                             required
                           />
