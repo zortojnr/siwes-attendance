@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserProfile(null);
         }
         
+        // Always set loading to false after handling auth state changes
         setLoading(false);
       }
     );
