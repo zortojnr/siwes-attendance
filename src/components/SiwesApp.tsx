@@ -461,13 +461,14 @@ export default function SiwesApp() {
               <span className="text-sm sm:text-base font-medium">
                 {userProfile.first_name} {userProfile.last_name}
               </span>
-              <Badge color={userProfile.role === 'admin' ? 'default' : 'secondary'} className="text-xs">
+              <Badge variant={userProfile.role === 'admin' ? 'default' : 'secondary'} className="text-xs">
                 {userProfile.role === 'admin' ? <Shield className="h-3 w-3 mr-1" /> : <GraduationCap className="h-3 w-3 mr-1" />}
                 {userProfile.role}
               </Badge>
             </div>
             <Button 
-              color="outline"
+              variant="outline" 
+              size="sm" 
               onClick={handleSignOut}
               disabled={loading}
               className="text-xs sm:text-sm"
@@ -666,6 +667,8 @@ export default function SiwesApp() {
                             {popularLocations.map((location, index) => (
                               <Button
                                 key={index}
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => handleLocationClick(location)}
                                 className="text-xs justify-start h-auto py-1 px-2"
                               >
@@ -721,12 +724,12 @@ export default function SiwesApp() {
                         <CardDescription className="text-sm">Latest attendance records</CardDescription>
                       </div>
                       <div className="flex flex-col sm:flex-row gap-2">
-                        <Button onClick={handleDownloadReport} className="text-xs sm:text-sm border border-input bg-background hover:bg-muted">
+                        <Button variant="outline" size="sm" onClick={handleDownloadReport} className="text-xs sm:text-sm">
                           <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                           <span className="hidden sm:inline">Export CSV</span>
                           <span className="sm:hidden">Export</span>
                         </Button>
-                        <Button color="destructive" onClick={handleClearAttendance} className="text-xs sm:text-sm">
+                        <Button variant="destructive" size="sm" onClick={handleClearAttendance} className="text-xs sm:text-sm">
                           <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                           <span className="hidden sm:inline">Clear All</span>
                           <span className="sm:hidden">Clear</span>
@@ -754,7 +757,7 @@ export default function SiwesApp() {
                               </div>
                             </div>
                             <div className="text-left sm:text-right">
-                              <Badge color="secondary" className="text-xs">
+                              <Badge variant="secondary" className="text-xs">
                                 <MapPin className="h-3 w-3 mr-1" />
                                 {record.latitude.toFixed(4)}, {record.longitude.toFixed(4)}
                               </Badge>
@@ -849,7 +852,7 @@ export default function SiwesApp() {
                                 <p className="text-xs text-muted-foreground">{record.time}</p>
                               </div>
                             </div>
-                            <Badge className="text-xs">
+                            <Badge variant="secondary" className="text-xs">
                               Present
                             </Badge>
                           </div>
