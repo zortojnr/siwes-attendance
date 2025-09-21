@@ -30,16 +30,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUserProfile = async (userId: string) => {
     try {
-      const { data: profile } = await supabase
+      console.log('Loading profile for user:', userId);
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
       
+      if (error) {
+        console.error('Profile query error:', error);
+        throw error;
+      }
+      
+      console.log('Profile loaded:', profile);
       setUserProfile(profile as UserProfile);
       return profile;
     } catch (error) {
       console.error('Error loading profile:', error);
+      setUserProfile(null);
       return null;
     }
   };
@@ -49,11 +57,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const initializeAuth = async () => {
       try {
+        console.log('Initializing auth...');
         // Get existing session first
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+        }
         
         if (!mounted) return;
         
+        console.log('Session loaded:', session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -63,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUserProfile(null);
         }
         
+        console.log('Auth initialization complete');
         setLoading(false);
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -77,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async (event, session) => {
         if (!mounted) return;
         
+        console.log('Auth state changed:', event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
