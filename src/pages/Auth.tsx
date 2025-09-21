@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Shield, GraduationCap, User } from 'lucide-react';
+import fudLogo from '@/assets/fud-logo.jpg';
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
@@ -227,8 +228,16 @@ export default function Auth() {
     <div className="min-h-screen bg-gradient-to-br from-background to-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <img 
+              src={fudLogo} 
+              alt="Federal University Dutse (FUD) Logo" 
+              className="h-24 w-24 object-contain"
+            />
+          </div>
           <h1 className="text-3xl font-bold text-primary">SIWES Portal</h1>
-          <p className="text-muted-foreground mt-2">Student Industrial Work Experience Scheme</p>
+          <p className="text-muted-foreground mt-2">Federal University Dutse</p>
+          <p className="text-sm text-muted-foreground">Student Industrial Work Experience Scheme</p>
         </div>
 
         <Tabs defaultValue="student" className="w-full">
