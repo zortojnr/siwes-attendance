@@ -10,106 +10,11 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.4"
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
-      attendance_records: {
-        Row: {
-          created_at: string
-          date: string
-          id: string
-          latitude: number
-          location_name: string | null
-          longitude: number
-          student_name: string
-          time: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          date?: string
-          id?: string
-          latitude: number
-          location_name?: string | null
-          longitude: number
-          student_name: string
-          time?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          date?: string
-          id?: string
-          latitude?: number
-          location_name?: string | null
-          longitude?: number
-          student_name?: string
-          time?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      profiles: {
-        Row: {
-          created_at: string
-          first_name: string | null
-          id: string
-          last_name: string | null
-          role: string | null
-          student_id: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          first_name?: string | null
-          id?: string
-          last_name?: string | null
-          role?: string | null
-          student_id?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          first_name?: string | null
-          id?: string
-          last_name?: string | null
-          role?: string | null
-          student_id?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      siwes_locations: {
-        Row: {
-          assigned_by: string | null
-          assigned_date: string
-          created_at: string
-          id: string
-          location: string
-          student_name: string
-        }
-        Insert: {
-          assigned_by?: string | null
-          assigned_date?: string
-          created_at?: string
-          id?: string
-          location: string
-          student_name: string
-        }
-        Update: {
-          assigned_by?: string | null
-          assigned_date?: string
-          created_at?: string
-          id?: string
-          location?: string
-          student_name?: string
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Views: {
       [_ in never]: never
