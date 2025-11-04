@@ -70,22 +70,27 @@ export default function Auth() {
       });
 
       if (signInError) {
-        // If user doesn't exist, create the admin account
-        if (signInError.message.includes('Invalid login credentials')) {
+        // Handle email not confirmed or invalid credentials
+        if (signInError.message.includes('Email not confirmed') || 
+            signInError.message.includes('Invalid login credentials')) {
+          // Create the admin account with auto-confirm
           const redirectUrl = `${window.location.origin}/`;
           
           const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email: adminEmail,
             password: adminPassword,
             options: {
-              emailRedirectTo: redirectUrl
+              emailRedirectTo: redirectUrl,
+              data: {
+                email_confirmed: true
+              }
             }
           });
 
           if (signUpError) throw signUpError;
 
           if (signUpData.user) {
-            // Create admin profile
+            // Create admin profile with role
             const { error: profileError } = await supabase
               .from('profiles')
               .upsert({
@@ -97,9 +102,19 @@ export default function Auth() {
 
             if (profileError) throw profileError;
 
+            // Try to sign in again after creation
+            const { error: retrySignInError } = await supabase.auth.signInWithPassword({
+              email: adminEmail,
+              password: adminPassword,
+            });
+
+            if (retrySignInError && !retrySignInError.message.includes('Email not confirmed')) {
+              throw retrySignInError;
+            }
+
             toast({
-              title: "Admin Account Created",
-              description: "Admin account created and logged in successfully."
+              title: "Admin Access Granted",
+              description: "Successfully logged in as administrator."
             });
           }
         } else {
@@ -177,14 +192,17 @@ export default function Auth() {
   };
 
   const handleStudentLogin = async () => {
-    if (!studentId || !studentPassword) {
+    if (!studentId) {
       toast({
         title: "Missing Information",
-        description: "Please enter your Student ID and password",
+        description: "Please enter your Student ID",
         variant: "destructive"
       });
       return;
     }
+
+    // Auto-fill password to "password" if not provided
+    const password = studentPassword || 'password';
 
     setLoading(true);
     try {
@@ -193,16 +211,58 @@ export default function Auth() {
       
       const { error } = await supabase.auth.signInWithPassword({
         email,
-        password: studentPassword,
+        password,
       });
 
       if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          toast({
-            title: "Login Failed",
-            description: "Invalid Student ID or password. Please register first if you don't have an account.",
-            variant: "destructive"
+        if (error.message.includes('Invalid login credentials') || 
+            error.message.includes('Email not confirmed')) {
+          // Auto-create student account with default password
+          const redirectUrl = `${window.location.origin}/`;
+          
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email,
+            password: 'password', // Always use default password
+            options: {
+              emailRedirectTo: redirectUrl,
+              data: {
+                email_confirmed: true
+              }
+            }
           });
+
+          if (signUpError) throw signUpError;
+
+          if (signUpData.user) {
+            // Create student profile with student ID as name initially
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .upsert({
+                user_id: signUpData.user.id,
+                first_name: studentId.split('/')[0] || 'Student',
+                last_name: studentId.split('/').pop() || '',
+                student_id: studentId,
+                role: 'student'
+              });
+
+            if (profileError) throw profileError;
+
+            // Try to sign in again
+            const { error: retryError } = await supabase.auth.signInWithPassword({
+              email,
+              password: 'password',
+            });
+
+            if (retryError && !retryError.message.includes('Email not confirmed')) {
+              throw retryError;
+            }
+
+            toast({
+              title: "Welcome!",
+              description: "Student account created and logged in successfully."
+            });
+            return;
+          }
         } else {
           throw error;
         }
@@ -338,13 +398,13 @@ export default function Auth() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="studentPassword">Password</Label>
+                      <Label htmlFor="studentPassword">Password (default: password)</Label>
                       <Input
                         id="studentPassword"
                         type="password"
                         value={studentPassword}
                         onChange={(e) => setStudentPassword(e.target.value)}
-                        placeholder="Enter your password"
+                        placeholder="password"
                       />
                     </div>
                     <Button 
