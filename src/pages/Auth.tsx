@@ -38,11 +38,20 @@ export default function Auth() {
           .upsert({
             user_id: data.user.id,
             first_name: 'Guest',
-            last_name: 'Student',
-            role: 'student'
+            last_name: 'Student'
           });
         
         if (profileError) throw profileError;
+
+        // Assign student role
+        const { error: roleError } = await (supabase as any)
+          .from('user_roles')
+          .upsert({
+            user_id: data.user.id,
+            role: 'student'
+          });
+
+        if (roleError) throw roleError;
         
         toast({
           title: "Welcome!",
@@ -90,17 +99,26 @@ export default function Auth() {
           if (signUpError) throw signUpError;
 
           if (signUpData.user) {
-            // Create admin profile with role
+            // Create admin profile
             const { error: profileError } = await supabase
               .from('profiles')
               .upsert({
                 user_id: signUpData.user.id,
                 first_name: 'System',
-                last_name: 'Administrator',
-                role: 'admin'
+                last_name: 'Administrator'
               });
 
             if (profileError) throw profileError;
+
+            // Assign admin role
+            const { error: roleError } = await (supabase as any)
+              .from('user_roles')
+              .upsert({
+                user_id: signUpData.user.id,
+                role: 'admin'
+              });
+
+            if (roleError) throw roleError;
 
             // Try to sign in again after creation
             const { error: retrySignInError } = await supabase.auth.signInWithPassword({
@@ -241,11 +259,20 @@ export default function Auth() {
                 user_id: signUpData.user.id,
                 first_name: studentId.split('/')[0] || 'Student',
                 last_name: studentId.split('/').pop() || '',
-                student_id: studentId,
-                role: 'student'
+                student_id: studentId
               });
 
             if (profileError) throw profileError;
+
+            // Assign student role
+            const { error: roleError } = await (supabase as any)
+              .from('user_roles')
+              .upsert({
+                user_id: signUpData.user.id,
+                role: 'student'
+              });
+
+            if (roleError) throw roleError;
 
             // Try to sign in again
             const { error: retryError } = await supabase.auth.signInWithPassword({
