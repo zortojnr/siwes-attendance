@@ -1,7 +1,11 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Routes, Route } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { AdminSidebar } from '@/components/AdminSidebar';
+import { DashboardHeader } from '@/components/DashboardHeader';
 import SiwesApp from '@/components/SiwesApp';
+import AnalyticsPage from './admin/AnalyticsPage';
 import { Loader2 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -10,7 +14,6 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (!loading && userProfile && userProfile.role !== 'admin') {
-      // Redirect non-admin users to their appropriate dashboard
       if (userProfile.role === 'student') {
         navigate('/student');
       }
@@ -29,5 +32,23 @@ export default function AdminDashboard() {
     return null;
   }
 
-  return <SiwesApp />;
+  return (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <AdminSidebar />
+        <div className="flex-1 flex flex-col">
+          <DashboardHeader />
+          <main className="flex-1 overflow-y-auto">
+            <Routes>
+              <Route path="/" element={<SiwesApp />} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/students" element={<SiwesApp />} />
+              <Route path="/locations" element={<SiwesApp />} />
+              <Route path="/settings" element={<SiwesApp />} />
+            </Routes>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
 }

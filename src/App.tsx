@@ -31,7 +31,7 @@ const App = () => (
             />
             <Route path="/auth" element={<Auth />} />
             <Route 
-              path="/admin" 
+              path="/admin/*" 
               element={
                 <ProtectedRoute fallback={<Auth />}>
                   <AdminDashboard />
@@ -39,7 +39,7 @@ const App = () => (
               } 
             />
             <Route 
-              path="/student" 
+              path="/student/*" 
               element={
                 <ProtectedRoute fallback={<Auth />}>
                   <StudentDashboard />
