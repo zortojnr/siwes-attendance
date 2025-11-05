@@ -219,6 +219,17 @@ export default function Auth() {
       return;
     }
 
+    // Validate student ID format (FCP/CCS/20U/XXXX where XXXX is any number)
+    const studentIdPattern = /^FCP\/CCS\/20U\/\d+$/;
+    if (!studentIdPattern.test(studentId)) {
+      toast({
+        title: "Invalid Student ID",
+        description: "Student ID must be in format: FCP/CCS/20U/XXXX (e.g., FCP/CCS/20U/1234)",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Auto-fill password to "password" if not provided
     const password = studentPassword || 'password';
 
@@ -383,7 +394,7 @@ export default function Auth() {
                         type="text"
                         value={studentId}
                         onChange={(e) => setStudentId(e.target.value)}
-                        placeholder="FUD/SCI/CSC/19/1234"
+                        placeholder="FCP/CCS/20U/1234"
                       />
                     </div>
                     <div className="space-y-2">
@@ -421,7 +432,7 @@ export default function Auth() {
                         type="text"
                         value={studentId}
                         onChange={(e) => setStudentId(e.target.value)}
-                        placeholder="FUD/SCI/CSC/19/1234"
+                        placeholder="FCP/CCS/20U/1234"
                       />
                     </div>
                     <div className="space-y-2">
