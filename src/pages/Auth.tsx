@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Shield, GraduationCap, User } from 'lucide-react';
 import fudLogo from '@/assets/fud-logo.jpg';
@@ -12,6 +14,19 @@ import fudLogo from '@/assets/fud-logo.jpg';
 export default function Auth() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { userProfile } = useAuth();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (userProfile) {
+      if (userProfile.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/student');
+      }
+    }
+  }, [userProfile, navigate]);
 
   // Admin login states
   const [adminEmail, setAdminEmail] = useState('university@admin.com');
