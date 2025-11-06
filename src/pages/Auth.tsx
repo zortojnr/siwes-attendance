@@ -22,24 +22,19 @@ export default function Auth() {
     if (userProfile) {
       if (userProfile.role === 'admin') {
         navigate('/admin');
-      } else if (userProfile.role === 'guest') {
-        navigate('/student');
       } else {
         navigate('/student');
       }
     }
   }, [userProfile, navigate]);
 
-  // Admin login states
-  const [adminEmail, setAdminEmail] = useState('university@admin.com');
+  // Admin login
+  const [adminEmail, setAdminEmail] = useState('admin@fud.edu.ng');
   const [adminPassword, setAdminPassword] = useState('admin123');
   
-  // Student login/registration states
+  // Student login
   const [studentId, setStudentId] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
-  const [studentFirstName, setStudentFirstName] = useState('');
-  const [studentLastName, setStudentLastName] = useState('');
-  const [showStudentRegister, setShowStudentRegister] = useState(false);
 
   const handleGuestLogin = async () => {
     setLoading(true);
@@ -49,33 +44,27 @@ export default function Auth() {
       if (error) throw error;
       
       if (data.user) {
-        // Create a guest profile
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert({
-            user_id: data.user.id,
-            first_name: 'Guest',
-            last_name: 'Student'
-          });
-        
-        if (profileError) throw profileError;
+        // Create guest profile
+        await supabase.from('profiles').upsert({
+          user_id: data.user.id,
+          first_name: 'Guest',
+          last_name: 'User',
+          role: 'guest'
+        });
 
         // Assign guest role
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .upsert({
-            user_id: data.user.id,
-            role: 'guest'
-          });
-
-        if (roleError) throw roleError;
+        await supabase.from('user_roles').upsert({
+          user_id: data.user.id,
+          role: 'guest'
+        });
         
         toast({
-          title: "Welcome!",
-          description: "You're now logged in as a guest student."
+          title: "Welcome Guest!",
+          description: "You're logged in as a guest."
         });
       }
     } catch (error: any) {
+      console.error('Guest login error:', error);
       toast({
         title: "Login Failed",
         description: error.message,
@@ -89,135 +78,62 @@ export default function Auth() {
   const handleAdminLogin = async () => {
     setLoading(true);
     try {
-      // First try to sign in
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      // Try to sign in
+      let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: adminEmail,
         password: adminPassword,
       });
 
+      // If login fails, create the admin account
       if (signInError) {
-        // Handle email not confirmed or invalid credentials
-        if (signInError.message.includes('Email not confirmed') || 
-            signInError.message.includes('Invalid login credentials')) {
-          // Create the admin account with auto-confirm
-          const redirectUrl = `${window.location.origin}/`;
-          
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email: adminEmail,
-            password: adminPassword,
-            options: {
-              emailRedirectTo: redirectUrl,
-              data: {
-                email_confirmed: true
-              }
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email: adminEmail,
+          password: adminPassword,
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: {
+              first_name: 'System',
+              last_name: 'Administrator',
+              role: 'admin'
             }
+          }
+        });
+
+        if (signUpError) throw signUpError;
+
+        if (signUpData.user) {
+          // Create admin profile
+          await supabase.from('profiles').upsert({
+            user_id: signUpData.user.id,
+            first_name: 'System',
+            last_name: 'Administrator',
+            role: 'admin'
           });
 
-          if (signUpError) throw signUpError;
+          // Assign admin role
+          await supabase.from('user_roles').upsert({
+            user_id: signUpData.user.id,
+            role: 'admin'
+          });
 
-          if (signUpData.user) {
-            // Create admin profile
-            const { error: profileError } = await supabase
-              .from('profiles')
-              .upsert({
-                user_id: signUpData.user.id,
-                first_name: 'System',
-                last_name: 'Administrator'
-              });
+          // Sign in after creation
+          const { error: retryError } = await supabase.auth.signInWithPassword({
+            email: adminEmail,
+            password: adminPassword,
+          });
 
-            if (profileError) throw profileError;
-
-            // Assign admin role
-            const { error: roleError } = await supabase
-              .from('user_roles')
-              .upsert({
-                user_id: signUpData.user.id,
-                role: 'admin'
-              });
-
-            if (roleError) throw roleError;
-
-            // Try to sign in again after creation
-            const { error: retrySignInError } = await supabase.auth.signInWithPassword({
-              email: adminEmail,
-              password: adminPassword,
-            });
-
-            if (retrySignInError && !retrySignInError.message.includes('Email not confirmed')) {
-              throw retrySignInError;
-            }
-
-            toast({
-              title: "Admin Access Granted",
-              description: "Successfully logged in as administrator."
-            });
-          }
-        } else {
-          throw signInError;
+          if (retryError) throw retryError;
         }
-      } else {
-        toast({
-          title: "Welcome Admin",
-          description: "Successfully logged in to admin dashboard."
-        });
       }
+
+      toast({
+        title: "Welcome Admin!",
+        description: "Successfully logged in."
+      });
     } catch (error: any) {
+      console.error('Admin login error:', error);
       toast({
         title: "Login Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStudentRegister = async () => {
-    if (!studentId || !studentPassword || !studentFirstName || !studentLastName) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill in all required fields",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Create email from student ID
-      const email = `${studentId}@student.fud.edu.ng`;
-      const redirectUrl = `${window.location.origin}/`;
-      
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password: studentPassword,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            first_name: studentFirstName,
-            last_name: studentLastName,
-            role: 'student',
-            student_id: studentId
-          }
-        }
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Registration Successful!",
-        description: "Your account has been created. You can now log in."
-      });
-
-      setShowStudentRegister(false);
-      // Clear form
-      setStudentId('');
-      setStudentPassword('');
-      setStudentFirstName('');
-      setStudentLastName('');
-    } catch (error: any) {
-      toast({
-        title: "Registration Failed",
         description: error.message,
         variant: "destructive"
       });
@@ -236,99 +152,79 @@ export default function Auth() {
       return;
     }
 
-    // Validate student ID format (FCP/CCS/20U/XXXX where XXXX is any number)
-    const studentIdPattern = /^FCP\/CCS\/20U\/\d+$/;
+    // Validate student ID format (FCP/CSS/20/XXXX)
+    const studentIdPattern = /^FCP\/CSS\/20\/\d+$/;
     if (!studentIdPattern.test(studentId)) {
       toast({
         title: "Invalid Student ID",
-        description: "Student ID must be in format: FCP/CCS/20U/XXXX (e.g., FCP/CCS/20U/1234)",
+        description: "Student ID must be in format: FCP/CSS/20/1234",
         variant: "destructive"
       });
       return;
     }
 
-    // Auto-fill password to "password" if not provided
-    const password = studentPassword || 'password';
-
     setLoading(true);
     try {
-      // Convert student ID to email format
+      // Convert student ID to email
       const email = `${studentId}@student.fud.edu.ng`;
+      const password = studentPassword || 'password';
       
-      const { error } = await supabase.auth.signInWithPassword({
+      // Try to sign in
+      let { error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) {
-        if (error.message.includes('Invalid login credentials') || 
-            error.message.includes('Email not confirmed')) {
-          // Auto-create student account with default password
-          const redirectUrl = `${window.location.origin}/`;
-          
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password: 'password', // Always use default password
-            options: {
-              emailRedirectTo: redirectUrl,
-              data: {
-                email_confirmed: true
-              }
+      // If login fails, create the student account
+      if (signInError) {
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password: 'password', // Default password
+          options: {
+            emailRedirectTo: `${window.location.origin}/`,
+            data: {
+              first_name: 'Student',
+              last_name: studentId.split('/').pop() || '',
+              role: 'student',
+              student_id: studentId
             }
+          }
+        });
+
+        if (signUpError) throw signUpError;
+
+        if (signUpData.user) {
+          // Create student profile
+          await supabase.from('profiles').upsert({
+            user_id: signUpData.user.id,
+            first_name: 'Student',
+            last_name: studentId.split('/').pop() || '',
+            role: 'student',
+            student_id: studentId
           });
 
-          if (signUpError) throw signUpError;
+          // Assign student role
+          await supabase.from('user_roles').upsert({
+            user_id: signUpData.user.id,
+            role: 'student'
+          });
 
-          if (signUpData.user) {
-            // Create student profile with student ID as name initially
-            const { error: profileError } = await supabase
-              .from('profiles')
-              .upsert({
-                user_id: signUpData.user.id,
-                first_name: studentId.split('/')[0] || 'Student',
-                last_name: studentId.split('/').pop() || '',
-                student_id: studentId
-              });
+          // Sign in after creation
+          const { error: retryError } = await supabase.auth.signInWithPassword({
+            email,
+            password: 'password',
+          });
 
-            if (profileError) throw profileError;
-
-            // Assign student role
-            const { error: roleError } = await supabase
-              .from('user_roles')
-              .upsert({
-                user_id: signUpData.user.id,
-                role: 'student'
-              });
-
-            if (roleError) throw roleError;
-
-            // Try to sign in again
-            const { error: retryError } = await supabase.auth.signInWithPassword({
-              email,
-              password: 'password',
-            });
-
-            if (retryError && !retryError.message.includes('Email not confirmed')) {
-              throw retryError;
-            }
-
-            toast({
-              title: "Welcome!",
-              description: "Student account created and logged in successfully."
-            });
-            return;
-          }
-        } else {
-          throw error;
+          if (retryError) throw retryError;
         }
-        return;
       }
 
       toast({
         title: "Welcome Student!",
-        description: "Successfully logged in to your dashboard."
+        description: "Successfully logged in."
       });
     } catch (error: any) {
+      console.error('Student login error:', error);
       toast({
         title: "Login Failed",
         description: error.message,
@@ -346,7 +242,7 @@ export default function Auth() {
           <div className="flex justify-center mb-4">
             <img 
               src={fudLogo} 
-              alt="Federal University Dutse (FUD) Logo" 
+              alt="Federal University Dutse Logo" 
               className="h-24 w-24 object-contain"
             />
           </div>
@@ -375,110 +271,37 @@ export default function Auth() {
             <Card>
               <CardHeader>
                 <CardTitle>Student Login</CardTitle>
-                <CardDescription>
-                  {showStudentRegister ? 'Create your student account' : 'Access your student dashboard'}
-                </CardDescription>
+                <CardDescription>Access your student dashboard</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {showStudentRegister ? (
-                  <>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="firstName">First Name</Label>
-                        <Input
-                          id="firstName"
-                          type="text"
-                          value={studentFirstName}
-                          onChange={(e) => setStudentFirstName(e.target.value)}
-                          placeholder="John"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="lastName">Last Name</Label>
-                        <Input
-                          id="lastName"
-                          type="text"
-                          value={studentLastName}
-                          onChange={(e) => setStudentLastName(e.target.value)}
-                          placeholder="Doe"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="studentId">Student ID</Label>
-                      <Input
-                        id="studentId"
-                        type="text"
-                        value={studentId}
-                        onChange={(e) => setStudentId(e.target.value)}
-                        placeholder="FCP/CCS/20U/1234"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="studentPassword">Password</Label>
-                      <Input
-                        id="studentPassword"
-                        type="password"
-                        value={studentPassword}
-                        onChange={(e) => setStudentPassword(e.target.value)}
-                        placeholder="Create a strong password"
-                      />
-                    </div>
-                    <Button 
-                      onClick={handleStudentRegister} 
-                      disabled={loading} 
-                      className="w-full"
-                    >
-                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Register
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => setShowStudentRegister(false)}
-                      className="w-full"
-                    >
-                      Already have an account? Sign In
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="studentId">Student ID</Label>
-                      <Input
-                        id="studentId"
-                        type="text"
-                        value={studentId}
-                        onChange={(e) => setStudentId(e.target.value)}
-                        placeholder="FCP/CCS/20U/1234"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="studentPassword">Password (default: password)</Label>
-                      <Input
-                        id="studentPassword"
-                        type="password"
-                        value={studentPassword}
-                        onChange={(e) => setStudentPassword(e.target.value)}
-                        placeholder="password"
-                      />
-                    </div>
-                    <Button 
-                      onClick={handleStudentLogin} 
-                      disabled={loading} 
-                      className="w-full"
-                    >
-                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Sign In
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      onClick={() => setShowStudentRegister(true)}
-                      className="w-full"
-                    >
-                      Don't have an account? Register
-                    </Button>
-                  </>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="studentId">Student ID</Label>
+                  <Input
+                    id="studentId"
+                    type="text"
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value)}
+                    placeholder="FCP/CSS/20/1234"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="studentPassword">Password (default: password)</Label>
+                  <Input
+                    id="studentPassword"
+                    type="password"
+                    value={studentPassword}
+                    onChange={(e) => setStudentPassword(e.target.value)}
+                    placeholder="password"
+                  />
+                </div>
+                <Button 
+                  onClick={handleStudentLogin} 
+                  disabled={loading} 
+                  className="w-full"
+                >
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Sign In
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -487,9 +310,7 @@ export default function Auth() {
             <Card>
               <CardHeader>
                 <CardTitle>Admin Login</CardTitle>
-                <CardDescription>
-                  Access the administrative dashboard
-                </CardDescription>
+                <CardDescription>Access the administrative dashboard</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -499,7 +320,7 @@ export default function Auth() {
                     type="email"
                     value={adminEmail}
                     onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="university@admin.com"
+                    placeholder="admin@fud.edu.ng"
                   />
                 </div>
                 <div className="space-y-2">
@@ -529,7 +350,7 @@ export default function Auth() {
               <CardHeader>
                 <CardTitle>Guest Access</CardTitle>
                 <CardDescription>
-                  Try the system as a guest student (limited features)
+                  Try the system as a guest (limited features)
                 </CardDescription>
               </CardHeader>
               <CardContent>
