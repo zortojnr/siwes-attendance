@@ -31,11 +31,12 @@ export default function Auth() {
   // Admin login
   const [adminEmail, setAdminEmail] = useState('admin@fud.edu.ng');
   const [adminPassword, setAdminPassword] = useState('admin123');
-  
+
   // Student login
   const [studentId, setStudentId] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
 
+  // Guest login
   const handleGuestLogin = async () => {
     setLoading(true);
     try {
@@ -54,7 +55,6 @@ export default function Auth() {
       }
 
       if (data.user) {
-        // Create guest profile
         await supabase.from('profiles').upsert({
           user_id: data.user.id,
           first_name: 'Guest',
@@ -62,7 +62,6 @@ export default function Auth() {
           role: 'guest'
         });
 
-        // Assign guest role
         await supabase.from('user_roles').upsert({
           user_id: data.user.id,
           role: 'guest'
@@ -85,6 +84,7 @@ export default function Auth() {
     }
   };
 
+  // Admin login
   const handleAdminLogin = async () => {
     if (!adminEmail || !adminPassword) {
       toast({
@@ -97,13 +97,11 @@ export default function Auth() {
 
     setLoading(true);
     try {
-      // Try to sign in
       let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: adminEmail.trim(),
         password: adminPassword,
       });
 
-      // If login fails, create the admin account
       if (signInError) {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: adminEmail.trim(),
@@ -118,20 +116,9 @@ export default function Auth() {
           }
         });
 
-        if (signUpError) {
-          if (signUpError.message.includes('email') || signUpError.message.includes('invalid')) {
-            toast({
-              title: "Invalid Email",
-              description: "Please use a valid institutional email address (e.g., admin@fud.edu.ng)",
-              variant: "destructive"
-            });
-            return;
-          }
-          throw signUpError;
-        }
+        if (signUpError) throw signUpError;
 
         if (signUpData.user) {
-          // Create admin profile
           await supabase.from('profiles').upsert({
             user_id: signUpData.user.id,
             first_name: 'System',
@@ -139,13 +126,11 @@ export default function Auth() {
             role: 'admin'
           });
 
-          // Assign admin role
           await supabase.from('user_roles').upsert({
             user_id: signUpData.user.id,
             role: 'admin'
           });
 
-          // Sign in after creation
           const { error: retryError } = await supabase.auth.signInWithPassword({
             email: adminEmail.trim(),
             password: adminPassword,
@@ -171,22 +156,17 @@ export default function Auth() {
     }
   };
 
+  // Student login (ID + Password only)
   const handleStudentLogin = async () => {
-    if (!studentId) {
-      toast({
-        title: "Missing Information",
-        description: "Please enter your Student ID",
-        variant: "destructive"
-      });
-      return;
-    }
+    const cleanStudentId = studentId.trim();
+    const password = studentPassword.trim() || '1234';
 
-    // Validate student ID format (FCP/CCS/20/XXXX) - accepts exactly 4 digits
+    // Validate format
     const studentIdPattern = /^FCP\/CCS\/20\/\d{4}$/;
-    if (!studentIdPattern.test(studentId.trim())) {
+    if (!studentIdPattern.test(cleanStudentId)) {
       toast({
         title: "Invalid Student ID",
-        description: "Student ID must be in format: FCP/CCS/20/1234 (exactly 4 digits)",
+        description: "Student ID must be in format: FCP/CCS/20/1234",
         variant: "destructive"
       });
       return;
@@ -194,80 +174,28 @@ export default function Auth() {
 
     setLoading(true);
     try {
-      // Convert student ID to email
-      const cleanStudentId = studentId.trim();
-      const email = `${cleanStudentId}@student.fud.edu.ng`;
-      const password = studentPassword.trim() || 'password';
-      
-      // Try to sign in
-      let { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error } = await supabase
+        .from('students') // use your students table
+        .select('*')
+        .eq('student_id', cleanStudentId)
+        .eq('password', password) // plain text for now
+        .single();
 
-      // If login fails, create the student account
-      if (signInError) {
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password: 'password', // Default password
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-            data: {
-              first_name: 'Student',
-              last_name: cleanStudentId.split('/').pop() || '',
-              role: 'student',
-              student_id: cleanStudentId
-            }
-          }
-        });
-
-        if (signUpError) {
-          if (signUpError.message.includes('email') || signUpError.message.includes('invalid')) {
-            toast({
-              title: "Invalid Student ID",
-              description: "Unable to create account with this Student ID. Please verify the format.",
-              variant: "destructive"
-            });
-            return;
-          }
-          throw signUpError;
-        }
-
-        if (signUpData.user) {
-          // Create student profile
-          await supabase.from('profiles').upsert({
-            user_id: signUpData.user.id,
-            first_name: 'Student',
-            last_name: cleanStudentId.split('/').pop() || '',
-            role: 'student',
-            student_id: cleanStudentId
-          });
-
-          // Assign student role
-          await supabase.from('user_roles').upsert({
-            user_id: signUpData.user.id,
-            role: 'student'
-          });
-
-          // Sign in after creation
-          const { error: retryError } = await supabase.auth.signInWithPassword({
-            email,
-            password: 'password',
-          });
-
-          if (retryError) throw retryError;
-        }
+      if (error || !data) {
+        throw new Error("Student ID or password incorrect");
       }
 
       toast({
         title: "Welcome Student!",
         description: "Successfully logged in."
       });
+
+      navigate('/student');
     } catch (error: any) {
       console.error('Student login error:', error);
       toast({
         title: "Login Failed",
-        description: error.message || "Failed to login. Please check your Student ID and try again.",
+        description: error.message || "Check your ID and password.",
         variant: "destructive"
       });
     } finally {
@@ -325,7 +253,7 @@ export default function Auth() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="studentPassword">Password (default: password)</Label>
+                  <Label htmlFor="studentPassword">Password</Label>
                   <Input
                     id="studentPassword"
                     type="password"
@@ -352,62 +280,4 @@ export default function Auth() {
                 <CardTitle>Admin Login</CardTitle>
                 <CardDescription>Access the administrative dashboard</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="adminEmail">Email</Label>
-                  <Input
-                    id="adminEmail"
-                    type="email"
-                    value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    placeholder="admin@fud.edu.ng"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="adminPassword">Password</Label>
-                  <Input
-                    id="adminPassword"
-                    type="password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="Enter admin password"
-                  />
-                </div>
-                <Button 
-                  onClick={handleAdminLogin} 
-                  disabled={loading} 
-                  className="w-full"
-                >
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Sign In as Admin
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="guest">
-            <Card>
-              <CardHeader>
-                <CardTitle>Guest Access</CardTitle>
-                <CardDescription>
-                  Try the system as a guest (limited features)
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  onClick={handleGuestLogin} 
-                  disabled={loading} 
-                  variant="outline"
-                  className="w-full"
-                >
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Continue as Guest
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
-  );
-}
+              <CardContent className="space-y
