@@ -40,9 +40,19 @@ export default function Auth() {
     setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInAnonymously();
-      
-      if (error) throw error;
-      
+
+      if (error) {
+        if (error.message.includes('Anonymous sign-ins are disabled')) {
+          toast({
+            title: "Guest Login Unavailable",
+            description: "Anonymous sign-ins are currently disabled. Please contact your administrator or use student/admin login.",
+            variant: "destructive"
+          });
+          return;
+        }
+        throw error;
+      }
+
       if (data.user) {
         // Create guest profile
         await supabase.from('profiles').upsert({
@@ -57,7 +67,7 @@ export default function Auth() {
           user_id: data.user.id,
           role: 'guest'
         });
-        
+
         toast({
           title: "Welcome Guest!",
           description: "You're logged in as a guest."
@@ -67,7 +77,7 @@ export default function Auth() {
       console.error('Guest login error:', error);
       toast({
         title: "Login Failed",
-        description: error.message,
+        description: error.message || "Unable to login as guest. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -76,18 +86,27 @@ export default function Auth() {
   };
 
   const handleAdminLogin = async () => {
+    if (!adminEmail || !adminPassword) {
+      toast({
+        title: "Missing Information",
+        description: "Please enter both email and password",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       // Try to sign in
       let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: adminEmail,
+        email: adminEmail.trim(),
         password: adminPassword,
       });
 
       // If login fails, create the admin account
       if (signInError) {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: adminEmail,
+          email: adminEmail.trim(),
           password: adminPassword,
           options: {
             emailRedirectTo: `${window.location.origin}/`,
@@ -99,7 +118,17 @@ export default function Auth() {
           }
         });
 
-        if (signUpError) throw signUpError;
+        if (signUpError) {
+          if (signUpError.message.includes('email') || signUpError.message.includes('invalid')) {
+            toast({
+              title: "Invalid Email",
+              description: "Please use a valid institutional email address (e.g., admin@fud.edu.ng)",
+              variant: "destructive"
+            });
+            return;
+          }
+          throw signUpError;
+        }
 
         if (signUpData.user) {
           // Create admin profile
@@ -118,7 +147,7 @@ export default function Auth() {
 
           // Sign in after creation
           const { error: retryError } = await supabase.auth.signInWithPassword({
-            email: adminEmail,
+            email: adminEmail.trim(),
             password: adminPassword,
           });
 
@@ -134,7 +163,7 @@ export default function Auth() {
       console.error('Admin login error:', error);
       toast({
         title: "Login Failed",
-        description: error.message,
+        description: error.message || "Failed to login. Please check your credentials.",
         variant: "destructive"
       });
     } finally {
@@ -152,12 +181,12 @@ export default function Auth() {
       return;
     }
 
-    // Validate student ID format (FCP/CSS/20/XXXX)
-    const studentIdPattern = /^FCP\/CSS\/20\/\d+$/;
-    if (!studentIdPattern.test(studentId)) {
+    // Validate student ID format (FCP/CSS/20/XXXX) - accepts any 4+ digit number
+    const studentIdPattern = /^FCP\/CSS\/20\/\d{4,}$/;
+    if (!studentIdPattern.test(studentId.trim())) {
       toast({
         title: "Invalid Student ID",
-        description: "Student ID must be in format: FCP/CSS/20/1234",
+        description: "Student ID must be in format: FCP/CSS/20/1234 (4 or more digits)",
         variant: "destructive"
       });
       return;
@@ -166,8 +195,9 @@ export default function Auth() {
     setLoading(true);
     try {
       // Convert student ID to email
-      const email = `${studentId}@student.fud.edu.ng`;
-      const password = studentPassword || 'password';
+      const cleanStudentId = studentId.trim();
+      const email = `${cleanStudentId}@student.fud.edu.ng`;
+      const password = studentPassword.trim() || 'password';
       
       // Try to sign in
       let { error: signInError } = await supabase.auth.signInWithPassword({
@@ -184,23 +214,33 @@ export default function Auth() {
             emailRedirectTo: `${window.location.origin}/`,
             data: {
               first_name: 'Student',
-              last_name: studentId.split('/').pop() || '',
+              last_name: cleanStudentId.split('/').pop() || '',
               role: 'student',
-              student_id: studentId
+              student_id: cleanStudentId
             }
           }
         });
 
-        if (signUpError) throw signUpError;
+        if (signUpError) {
+          if (signUpError.message.includes('email') || signUpError.message.includes('invalid')) {
+            toast({
+              title: "Invalid Student ID",
+              description: "Unable to create account with this Student ID. Please verify the format.",
+              variant: "destructive"
+            });
+            return;
+          }
+          throw signUpError;
+        }
 
         if (signUpData.user) {
           // Create student profile
           await supabase.from('profiles').upsert({
             user_id: signUpData.user.id,
             first_name: 'Student',
-            last_name: studentId.split('/').pop() || '',
+            last_name: cleanStudentId.split('/').pop() || '',
             role: 'student',
-            student_id: studentId
+            student_id: cleanStudentId
           });
 
           // Assign student role
@@ -227,7 +267,7 @@ export default function Auth() {
       console.error('Student login error:', error);
       toast({
         title: "Login Failed",
-        description: error.message,
+        description: error.message || "Failed to login. Please check your Student ID and try again.",
         variant: "destructive"
       });
     } finally {
