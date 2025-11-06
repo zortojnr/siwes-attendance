@@ -181,12 +181,12 @@ export default function Auth() {
       return;
     }
 
-    // Validate student ID format (FCP/CSS/20/XXXX) - accepts any 4+ digit number
-    const studentIdPattern = /^FCP\/CSS\/20\/\d{4,}$/;
+    // Validate student ID format (FCP/CCS/20/XXXX) - accepts exactly 4 digits
+    const studentIdPattern = /^FCP\/CCS\/20\/\d{4}$/;
     if (!studentIdPattern.test(studentId.trim())) {
       toast({
         title: "Invalid Student ID",
-        description: "Student ID must be in format: FCP/CSS/20/1234 (4 or more digits)",
+        description: "Student ID must be in format: FCP/CCS/20/1234 (exactly 4 digits)",
         variant: "destructive"
       });
       return;
@@ -321,7 +321,7 @@ export default function Auth() {
                     type="text"
                     value={studentId}
                     onChange={(e) => setStudentId(e.target.value)}
-                    placeholder="FCP/CSS/20/1234"
+                    placeholder="FCP/CCS/20/1234"
                   />
                 </div>
                 <div className="space-y-2">
