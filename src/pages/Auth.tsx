@@ -15,14 +15,14 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { userProfile } = useAuth();
+  const { userProfile, setUserProfile } = useAuth(); // include setter
 
   // Redirect if already logged in
   useEffect(() => {
     if (userProfile) {
       if (userProfile.role === 'admin') {
         navigate('/admin');
-      } else {
+      } else if (userProfile.role === 'student') {
         navigate('/student');
       }
     }
@@ -67,6 +67,13 @@ export default function Auth() {
           role: 'guest'
         });
 
+        setUserProfile({
+          user_id: data.user.id,
+          role: 'guest',
+          first_name: 'Guest',
+          last_name: 'User'
+        });
+
         toast({
           title: "Welcome Guest!",
           description: "You're logged in as a guest."
@@ -97,14 +104,13 @@ export default function Auth() {
 
     setLoading(true);
     try {
-      let { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email: adminEmail.trim(),
         password: adminPassword,
       });
 
       if (signInError) {
-        // Sign up admin if not exists
-        const { error: signUpError } = await supabase.auth.signUp({
+        const { error: signUpError, data: signUpData } = await supabase.auth.signUp({
           email: adminEmail.trim(),
           password: adminPassword,
           options: {
@@ -121,6 +127,14 @@ export default function Auth() {
         });
         if (retryError) throw retryError;
       }
+
+      // Update context
+      setUserProfile({
+        user_id: signInData?.user?.id || '',
+        role: 'admin',
+        first_name: 'System',
+        last_name: 'Administrator'
+      });
 
       toast({
         title: "Welcome Admin!",
@@ -139,11 +153,12 @@ export default function Auth() {
     }
   };
 
-  // Student login (ID + password only)
+  // Student login
   const handleStudentLogin = async () => {
     const cleanStudentId = studentId.trim();
     const password = studentPassword.trim() || '1234';
 
+    // Validate ID format
     const studentIdPattern = /^FCP\/CCS\/20\/\d{4}$/;
     if (!studentIdPattern.test(cleanStudentId)) {
       toast({
@@ -164,6 +179,15 @@ export default function Auth() {
         .single();
 
       if (error || !data) throw new Error("Student ID or password incorrect");
+
+      // Update AuthContext
+      setUserProfile({
+        user_id: data.id,
+        role: 'student',
+        student_id: data.student_id,
+        first_name: data.first_name,
+        last_name: data.last_name
+      });
 
       toast({
         title: "Welcome Student!",
@@ -207,7 +231,7 @@ export default function Auth() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Student Tab */}
+          {/* Student */}
           <TabsContent value="student">
             <Card>
               <CardHeader>
@@ -226,13 +250,13 @@ export default function Auth() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="studentPassword">Password</Label>
+                  <Label htmlFor="studentPassword">Password (default: 1234)</Label>
                   <Input
                     id="studentPassword"
                     type="password"
                     value={studentPassword}
                     onChange={(e) => setStudentPassword(e.target.value)}
-                    placeholder="password"
+                    placeholder="1234"
                   />
                 </div>
                 <Button onClick={handleStudentLogin} disabled={loading} className="w-full">
@@ -243,7 +267,7 @@ export default function Auth() {
             </Card>
           </TabsContent>
 
-          {/* Admin Tab */}
+          {/* Admin */}
           <TabsContent value="admin">
             <Card>
               <CardHeader>
@@ -279,7 +303,7 @@ export default function Auth() {
             </Card>
           </TabsContent>
 
-          {/* Guest Tab */}
+          {/* Guest */}
           <TabsContent value="guest">
             <Card>
               <CardHeader>
