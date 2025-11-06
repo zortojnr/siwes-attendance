@@ -28,11 +28,11 @@ export default function Auth() {
     }
   }, [userProfile, navigate]);
 
-  // Admin login
+  // Admin login state
   const [adminEmail, setAdminEmail] = useState('admin@fud.edu.ng');
   const [adminPassword, setAdminPassword] = useState('admin123');
 
-  // Student login
+  // Student login state
   const [studentId, setStudentId] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
 
@@ -46,7 +46,7 @@ export default function Auth() {
         if (error.message.includes('Anonymous sign-ins are disabled')) {
           toast({
             title: "Guest Login Unavailable",
-            description: "Anonymous sign-ins are currently disabled. Please contact your administrator or use student/admin login.",
+            description: "Anonymous sign-ins are currently disabled. Please use student/admin login.",
             variant: "destructive"
           });
           return;
@@ -76,7 +76,7 @@ export default function Auth() {
       console.error('Guest login error:', error);
       toast({
         title: "Login Failed",
-        description: error.message || "Unable to login as guest. Please try again.",
+        description: error.message || "Unable to login as guest.",
         variant: "destructive"
       });
     } finally {
@@ -97,58 +97,41 @@ export default function Auth() {
 
     setLoading(true);
     try {
-      let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      let { error: signInError } = await supabase.auth.signInWithPassword({
         email: adminEmail.trim(),
         password: adminPassword,
       });
 
       if (signInError) {
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        // Sign up admin if not exists
+        const { error: signUpError } = await supabase.auth.signUp({
           email: adminEmail.trim(),
           password: adminPassword,
           options: {
             emailRedirectTo: `${window.location.origin}/`,
-            data: {
-              first_name: 'System',
-              last_name: 'Administrator',
-              role: 'admin'
-            }
+            data: { first_name: 'System', last_name: 'Administrator', role: 'admin' }
           }
         });
-
         if (signUpError) throw signUpError;
 
-        if (signUpData.user) {
-          await supabase.from('profiles').upsert({
-            user_id: signUpData.user.id,
-            first_name: 'System',
-            last_name: 'Administrator',
-            role: 'admin'
-          });
-
-          await supabase.from('user_roles').upsert({
-            user_id: signUpData.user.id,
-            role: 'admin'
-          });
-
-          const { error: retryError } = await supabase.auth.signInWithPassword({
-            email: adminEmail.trim(),
-            password: adminPassword,
-          });
-
-          if (retryError) throw retryError;
-        }
+        // Retry login
+        const { error: retryError } = await supabase.auth.signInWithPassword({
+          email: adminEmail.trim(),
+          password: adminPassword,
+        });
+        if (retryError) throw retryError;
       }
 
       toast({
         title: "Welcome Admin!",
         description: "Successfully logged in."
       });
+      navigate('/admin');
     } catch (error: any) {
       console.error('Admin login error:', error);
       toast({
         title: "Login Failed",
-        description: error.message || "Failed to login. Please check your credentials.",
+        description: error.message || "Check your credentials.",
         variant: "destructive"
       });
     } finally {
@@ -156,12 +139,11 @@ export default function Auth() {
     }
   };
 
-  // Student login (ID + Password only)
+  // Student login (ID + password only)
   const handleStudentLogin = async () => {
     const cleanStudentId = studentId.trim();
     const password = studentPassword.trim() || '1234';
 
-    // Validate format
     const studentIdPattern = /^FCP\/CCS\/20\/\d{4}$/;
     if (!studentIdPattern.test(cleanStudentId)) {
       toast({
@@ -175,21 +157,18 @@ export default function Auth() {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('students') // use your students table
+        .from('students')
         .select('*')
         .eq('student_id', cleanStudentId)
-        .eq('password', password) // plain text for now
+        .eq('password', password)
         .single();
 
-      if (error || !data) {
-        throw new Error("Student ID or password incorrect");
-      }
+      if (error || !data) throw new Error("Student ID or password incorrect");
 
       toast({
         title: "Welcome Student!",
         description: "Successfully logged in."
       });
-
       navigate('/student');
     } catch (error: any) {
       console.error('Student login error:', error);
@@ -208,11 +187,7 @@ export default function Auth() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <img 
-              src={fudLogo} 
-              alt="Federal University Dutse Logo" 
-              className="h-24 w-24 object-contain"
-            />
+            <img src={fudLogo} alt="FUD Logo" className="h-24 w-24 object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-primary">SIWES Portal</h1>
           <p className="text-muted-foreground mt-2">Federal University Dutse</p>
@@ -222,19 +197,17 @@ export default function Auth() {
         <Tabs defaultValue="student" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="student" className="flex items-center gap-2">
-              <GraduationCap className="h-4 w-4" />
-              Student
+              <GraduationCap className="h-4 w-4" /> Student
             </TabsTrigger>
             <TabsTrigger value="admin" className="flex items-center gap-2">
-              <Shield className="h-4 w-4" />
-              Admin
+              <Shield className="h-4 w-4" /> Admin
             </TabsTrigger>
             <TabsTrigger value="guest" className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              Guest
+              <User className="h-4 w-4" /> Guest
             </TabsTrigger>
           </TabsList>
 
+          {/* Student Tab */}
           <TabsContent value="student">
             <Card>
               <CardHeader>
@@ -262,11 +235,7 @@ export default function Auth() {
                     placeholder="password"
                   />
                 </div>
-                <Button 
-                  onClick={handleStudentLogin} 
-                  disabled={loading} 
-                  className="w-full"
-                >
+                <Button onClick={handleStudentLogin} disabled={loading} className="w-full">
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Sign In
                 </Button>
@@ -274,10 +243,59 @@ export default function Auth() {
             </Card>
           </TabsContent>
 
+          {/* Admin Tab */}
           <TabsContent value="admin">
             <Card>
               <CardHeader>
                 <CardTitle>Admin Login</CardTitle>
                 <CardDescription>Access the administrative dashboard</CardDescription>
               </CardHeader>
-              <CardContent className="space-y
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="adminEmail">Email</Label>
+                  <Input
+                    id="adminEmail"
+                    type="email"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="admin@fud.edu.ng"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="adminPassword">Password</Label>
+                  <Input
+                    id="adminPassword"
+                    type="password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="Enter admin password"
+                  />
+                </div>
+                <Button onClick={handleAdminLogin} disabled={loading} className="w-full">
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Sign In as Admin
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Guest Tab */}
+          <TabsContent value="guest">
+            <Card>
+              <CardHeader>
+                <CardTitle>Guest Access</CardTitle>
+                <CardDescription>Try the system as a guest (limited features)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleGuestLogin} disabled={loading} variant="outline" className="w-full">
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Continue as Guest
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
