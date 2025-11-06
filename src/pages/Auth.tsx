@@ -22,6 +22,8 @@ export default function Auth() {
     if (userProfile) {
       if (userProfile.role === 'admin') {
         navigate('/admin');
+      } else if (userProfile.role === 'guest') {
+        navigate('/student');
       } else {
         navigate('/student');
       }
@@ -58,12 +60,12 @@ export default function Auth() {
         
         if (profileError) throw profileError;
 
-        // Assign student role
-        const { error: roleError } = await (supabase as any)
+        // Assign guest role
+        const { error: roleError } = await supabase
           .from('user_roles')
           .upsert({
             user_id: data.user.id,
-            role: 'student'
+            role: 'guest'
           });
 
         if (roleError) throw roleError;
@@ -126,7 +128,7 @@ export default function Auth() {
             if (profileError) throw profileError;
 
             // Assign admin role
-            const { error: roleError } = await (supabase as any)
+            const { error: roleError } = await supabase
               .from('user_roles')
               .upsert({
                 user_id: signUpData.user.id,
@@ -291,7 +293,7 @@ export default function Auth() {
             if (profileError) throw profileError;
 
             // Assign student role
-            const { error: roleError } = await (supabase as any)
+            const { error: roleError } = await supabase
               .from('user_roles')
               .upsert({
                 user_id: signUpData.user.id,

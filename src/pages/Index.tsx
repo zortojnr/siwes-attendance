@@ -12,10 +12,10 @@ export default function Index() {
       // Redirect based on role
       if (userProfile.role === 'admin') {
         navigate('/admin');
-      } else if (userProfile.role === 'student') {
+      } else if (userProfile.role === 'student' || userProfile.role === 'guest') {
         navigate('/student');
       } else {
-        // Default to student dashboard for guests or unknown roles
+        // Default to student dashboard for unknown roles
         navigate('/student');
       }
     }

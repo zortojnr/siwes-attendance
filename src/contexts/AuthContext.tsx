@@ -7,7 +7,7 @@ interface UserProfile {
   user_id: string;
   first_name: string | null;
   last_name: string | null;
-  role: 'student' | 'admin';
+  role: 'student' | 'admin' | 'guest';
   student_id?: string | null;
   created_at: string;
   updated_at: string;
@@ -41,10 +41,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Profile query error:', error);
         throw error;
       }
+
+      // Load role from user_roles table
+      const { data: roleData, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (roleError) {
+        console.error('Role query error:', roleError);
+      }
+
+      // Combine profile with role from user_roles table
+      const userProfile = {
+        ...profile,
+        role: roleData?.role || profile?.role || 'student'
+      } as UserProfile;
       
-      console.log('Profile loaded:', profile);
-      setUserProfile(profile as UserProfile);
-      return profile;
+      console.log('Profile loaded with role:', userProfile);
+      setUserProfile(userProfile);
+      return userProfile;
     } catch (error) {
       console.error('Error loading profile:', error);
       setUserProfile(null);
