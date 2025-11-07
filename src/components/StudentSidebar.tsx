@@ -27,7 +27,7 @@ export function StudentSidebar() {
     <Sidebar className={open ? "w-60" : "w-14"} collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Student Portal</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-xs sm:text-sm">Student Portal</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (
@@ -38,12 +38,12 @@ export function StudentSidebar() {
                       end
                       className={({ isActive }) =>
                         isActive
-                          ? "bg-primary text-primary-foreground font-medium"
-                          : "hover:bg-muted/50"
+                          ? "bg-primary text-primary-foreground font-medium text-sm"
+                          : "hover:bg-muted/50 text-sm"
                       }
                     >
-                      <item.icon className="h-4 w-4" />
-                      {open && <span>{item.title}</span>}
+                      <item.icon className="h-4 w-4 flex-shrink-0" />
+                      {open && <span className="truncate">{item.title}</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

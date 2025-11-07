@@ -34,11 +34,11 @@ export function DashboardHeader() {
   };
 
   return (
-    <header className="h-14 border-b bg-background flex items-center justify-between px-4">
-      <div className="flex items-center gap-4">
+    <header className="h-14 border-b bg-background flex items-center justify-between px-3 sm:px-4 lg:px-6">
+      <div className="flex items-center gap-2 sm:gap-4">
         <SidebarTrigger />
-        <div className="flex items-center space-x-3">
-          <div className="h-8 w-8 rounded-full bg-white p-1 shadow">
+        <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-white p-1 shadow">
             <img 
               src="/lovable-uploads/bdcd74c6-b4ce-411a-9a19-1281d6a1718e.png" 
               alt="FUD Logo" 
@@ -46,13 +46,13 @@ export function DashboardHeader() {
             />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-primary">FUD SIWES Portal</h1>
+            <h1 className="text-sm sm:text-base lg:text-lg font-bold text-primary">FUD SIWES Portal</h1>
           </div>
         </div>
       </div>
       
-      <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-2 sm:space-x-4">
+        <div className="hidden sm:flex items-center space-x-2">
           <User className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">
             {userProfile?.first_name} {userProfile?.last_name}
@@ -71,13 +71,14 @@ export function DashboardHeader() {
           size="sm" 
           onClick={handleSignOut}
           disabled={loading}
+          className="text-xs sm:text-sm"
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <>
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
+              <LogOut className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Sign Out</span>
             </>
           )}
         </Button>

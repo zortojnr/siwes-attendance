@@ -233,11 +233,11 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4 sm:p-6 md:p-8">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="h-20 w-20 rounded-full bg-white p-3 shadow-lg">
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="flex justify-center mb-3 sm:mb-4">
+            <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-white p-2 sm:p-3 shadow-lg">
               <img
                 src="/lovable-uploads/bdcd74c6-b4ce-411a-9a19-1281d6a1718e.png"
                 alt="FUD Logo"
@@ -245,57 +245,62 @@ export default function Auth() {
               />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-primary mb-2">FUD SIWES Portal</h1>
-          <p className="text-muted-foreground">Federal University Dutse</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-primary mb-2">FUD SIWES Portal</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Federal University Dutse</p>
         </div>
 
         <Card className="shadow-xl">
-          <CardHeader>
-            <CardTitle>Sign In</CardTitle>
-            <CardDescription>Choose your account type to continue</CardDescription>
+          <CardHeader className="space-y-1 px-4 sm:px-6">
+            <CardTitle className="text-xl sm:text-2xl">Sign In</CardTitle>
+            <CardDescription className="text-sm">Choose your account type to continue</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6">
             <Tabs defaultValue="admin" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="admin">
-                  <Shield className="h-4 w-4 mr-1" />
-                  Admin
+              <TabsList className="grid w-full grid-cols-3 h-auto">
+                <TabsTrigger value="admin" className="text-xs sm:text-sm py-2">
+                  <Shield className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  <span className="hidden sm:inline">Admin</span>
+                  <span className="sm:hidden">Adm</span>
                 </TabsTrigger>
-                <TabsTrigger value="student">
-                  <GraduationCap className="h-4 w-4 mr-1" />
-                  Student
+                <TabsTrigger value="student" className="text-xs sm:text-sm py-2">
+                  <GraduationCap className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  <span className="hidden sm:inline">Student</span>
+                  <span className="sm:hidden">Std</span>
                 </TabsTrigger>
-                <TabsTrigger value="guest">
-                  <UserCircle className="h-4 w-4 mr-1" />
-                  Guest
+                <TabsTrigger value="guest" className="text-xs sm:text-sm py-2">
+                  <UserCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                  <span className="hidden sm:inline">Guest</span>
+                  <span className="sm:hidden">Gst</span>
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="admin">
-                <form onSubmit={handleAdminLogin} className="space-y-4">
+                <form onSubmit={handleAdminLogin} className="space-y-3 sm:space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="admin-email">Email</Label>
+                    <Label htmlFor="admin-email" className="text-sm">Email</Label>
                     <Input
                       id="admin-email"
                       type="email"
                       placeholder="admin@fud.edu.ng"
                       value={adminEmail}
                       onChange={(e) => setAdminEmail(e.target.value)}
+                      className="text-sm sm:text-base"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="admin-password">Password</Label>
+                    <Label htmlFor="admin-password" className="text-sm">Password</Label>
                     <Input
                       id="admin-password"
                       type="password"
                       placeholder="Enter password"
                       value={adminPassword}
                       onChange={(e) => setAdminPassword(e.target.value)}
+                      className="text-sm sm:text-base"
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button type="submit" className="w-full text-sm sm:text-base" disabled={loading}>
                     {loading ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -309,15 +314,16 @@ export default function Auth() {
               </TabsContent>
 
               <TabsContent value="student">
-                <form onSubmit={handleStudentLogin} className="space-y-4">
+                <form onSubmit={handleStudentLogin} className="space-y-3 sm:space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="student-id">Student ID</Label>
+                    <Label htmlFor="student-id" className="text-sm">Student ID</Label>
                     <Input
                       id="student-id"
                       type="text"
                       placeholder="FCP/CSS/20/1234"
                       value={studentId}
                       onChange={(e) => setStudentId(e.target.value)}
+                      className="text-sm sm:text-base"
                       required
                     />
                     <p className="text-xs text-muted-foreground">
@@ -325,17 +331,18 @@ export default function Auth() {
                     </p>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="student-password">Password</Label>
+                    <Label htmlFor="student-password" className="text-sm">Password</Label>
                     <Input
                       id="student-password"
                       type="password"
                       placeholder="Enter password"
                       value={studentPassword}
                       onChange={(e) => setStudentPassword(e.target.value)}
+                      className="text-sm sm:text-base"
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
+                  <Button type="submit" className="w-full text-sm sm:text-base" disabled={loading}>
                     {loading ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -349,13 +356,13 @@ export default function Auth() {
               </TabsContent>
 
               <TabsContent value="guest">
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground text-center py-4">
+                <div className="space-y-3 sm:space-y-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground text-center py-3 sm:py-4">
                     Continue as a guest to view the SIWES portal with limited access.
                   </p>
                   <Button
                     type="button"
-                    className="w-full"
+                    className="w-full text-sm sm:text-base"
                     onClick={handleGuestLogin}
                     disabled={loading}
                   >
@@ -374,7 +381,7 @@ export default function Auth() {
           </CardContent>
         </Card>
 
-        <p className="text-center text-sm text-muted-foreground mt-6">
+        <p className="text-center text-xs sm:text-sm text-muted-foreground mt-4 sm:mt-6">
           Secure SIWES Management System
         </p>
       </div>
