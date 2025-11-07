@@ -20,7 +20,7 @@ export default function Auth() {
   const [studentId, setStudentId] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
 
-  const studentIdPattern = /^FCP\/CSS\/20\/\d{4,}$/;
+  const studentIdPattern = /^FCP\/CCS\/20\/\d{4}$/;
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,7 +104,7 @@ export default function Auth() {
     if (!studentIdPattern.test(studentId)) {
       toast({
         title: "Invalid Student ID",
-        description: "Student ID must be in format: FCP/CSS/20/XXXX (e.g., FCP/CSS/20/1234)",
+        description: "Student ID must be in format: FCP/CCS/20/XXXX (e.g., FCP/CCS/20/1234)",
         variant: "destructive"
       });
       return;
@@ -320,14 +320,14 @@ export default function Auth() {
                     <Input
                       id="student-id"
                       type="text"
-                      placeholder="FCP/CSS/20/1234"
+                      placeholder="FCP/CCS/20/1234"
                       value={studentId}
                       onChange={(e) => setStudentId(e.target.value)}
                       className="text-sm sm:text-base"
                       required
                     />
                     <p className="text-xs text-muted-foreground">
-                      Format: FCP/CSS/20/XXXX
+                      Format: FCP/CCS/20/XXXX
                     </p>
                   </div>
                   <div className="space-y-2">
