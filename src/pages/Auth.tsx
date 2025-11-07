@@ -35,6 +35,7 @@ export default function Auth() {
       });
 
       if (signInError) {
+        // User doesn't exist, create new admin account
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -51,24 +52,31 @@ export default function Auth() {
         if (signUpError) throw signUpError;
 
         if (signUpData.user) {
-          await supabase.from('profiles').upsert({
+          // Create profile
+          const { error: profileError } = await supabase.from('profiles').insert({
             user_id: signUpData.user.id,
             first_name: 'System',
             last_name: 'Administrator',
             role: 'admin'
           });
 
-          await supabase.from('user_roles').upsert({
+          if (profileError) console.error('Profile creation error:', profileError);
+
+          // Create role entry
+          const { error: roleError } = await supabase.from('user_roles').insert({
             user_id: signUpData.user.id,
             role: 'admin'
           });
 
-          const { error: retryError } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
+          if (roleError) console.error('Role creation error:', roleError);
 
-          if (retryError) throw retryError;
+          toast({
+            title: "Admin Account Created!",
+            description: "Please sign in with your new credentials."
+          });
+          
+          setLoading(false);
+          return;
         }
       }
 
@@ -113,6 +121,7 @@ export default function Auth() {
       });
 
       if (signInError) {
+        // User doesn't exist, create new student account
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -128,7 +137,8 @@ export default function Auth() {
         if (signUpError) throw signUpError;
 
         if (signUpData.user) {
-          await supabase.from('profiles').upsert({
+          // Create profile
+          const { error: profileError } = await supabase.from('profiles').insert({
             user_id: signUpData.user.id,
             first_name: studentId.split('/')[3] || 'Student',
             last_name: 'User',
@@ -136,17 +146,23 @@ export default function Auth() {
             role: 'student'
           });
 
-          await supabase.from('user_roles').upsert({
+          if (profileError) console.error('Profile creation error:', profileError);
+
+          // Create role entry
+          const { error: roleError } = await supabase.from('user_roles').insert({
             user_id: signUpData.user.id,
             role: 'student'
           });
 
-          const { error: retryError } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
+          if (roleError) console.error('Role creation error:', roleError);
 
-          if (retryError) throw retryError;
+          toast({
+            title: "Student Account Created!",
+            description: "Please sign in with your new credentials."
+          });
+          
+          setLoading(false);
+          return;
         }
       }
 
