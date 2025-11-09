@@ -29,13 +29,14 @@ export default function Auth() {
       const email = adminEmail.trim().toLowerCase();
       const password = adminPassword.trim();
 
+      // Try to sign in first
       let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (signInError) {
-        // User doesn't exist, create new admin account
+        // User doesn't exist, create new admin account with email confirmation disabled
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
@@ -57,7 +58,6 @@ export default function Auth() {
             user_id: signUpData.user.id,
             first_name: 'System',
             last_name: 'Administrator',
-            role: 'admin'
           });
 
           if (profileError) console.error('Profile creation error:', profileError);
@@ -70,10 +70,30 @@ export default function Auth() {
 
           if (roleError) console.error('Role creation error:', roleError);
 
+          // If session exists, navigate directly
+          if (signUpData.session) {
+            toast({
+              title: "Welcome Admin!",
+              description: "Account created and logged in successfully."
+            });
+            navigate('/admin');
+            return;
+          }
+
           toast({
             title: "Admin Account Created!",
-            description: "Please sign in with your new credentials."
+            description: "Logging you in..."
           });
+          
+          // Try to sign in immediately
+          const { error: immediateSignInError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+
+          if (!immediateSignInError) {
+            navigate('/admin');
+          }
           
           setLoading(false);
           return;
@@ -115,6 +135,7 @@ export default function Auth() {
       const email = `${studentId.replace(/\//g, '_')}@student.fud.edu.ng`;
       const password = studentPassword.trim();
 
+      // Try to sign in first
       let { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -143,7 +164,6 @@ export default function Auth() {
             first_name: studentId.split('/')[3] || 'Student',
             last_name: 'User',
             student_id: studentId,
-            role: 'student'
           });
 
           if (profileError) console.error('Profile creation error:', profileError);
@@ -156,10 +176,30 @@ export default function Auth() {
 
           if (roleError) console.error('Role creation error:', roleError);
 
+          // If session exists, navigate directly
+          if (signUpData.session) {
+            toast({
+              title: "Welcome Student!",
+              description: "Account created and logged in successfully."
+            });
+            navigate('/student');
+            return;
+          }
+
           toast({
             title: "Student Account Created!",
-            description: "Please sign in with your new credentials."
+            description: "Logging you in..."
           });
+          
+          // Try to sign in immediately
+          const { error: immediateSignInError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+
+          if (!immediateSignInError) {
+            navigate('/student');
+          }
           
           setLoading(false);
           return;
