@@ -28,11 +28,13 @@ export default function AnalyticsPage() {
 
   const loadAnalytics = async () => {
     try {
-      // Get total students
-      const { count: studentCount } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
+      // Get total students - count users with student role
+      const { data: studentRoles } = await supabase
+        .from('user_roles')
+        .select('user_id')
         .eq('role', 'student');
+      
+      const studentCount = studentRoles?.length || 0;
 
       // Get total attendance records
       const { data: attendanceData, count: attendanceCount } = await supabase
@@ -146,7 +148,7 @@ export default function AnalyticsPage() {
                     <div>
                       <p className="font-medium">{record.student_name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {record.location_name || 'Unknown Location'}
+                        {record.location || 'Unknown Location'}
                       </p>
                     </div>
                   </div>

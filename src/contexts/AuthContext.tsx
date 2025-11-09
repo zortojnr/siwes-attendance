@@ -54,10 +54,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Combine profile with role from user_roles table
-      const userProfile = {
-        ...profile,
-        role: roleData?.role || profile?.role || 'student'
-      } as UserProfile;
+      if (!profile) {
+        console.log('No profile found for user');
+        setUserProfile(null);
+        return null;
+      }
+
+      const userProfile: UserProfile = {
+        id: profile.id,
+        user_id: profile.user_id,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        role: roleData?.role || 'student',
+        student_id: profile.student_id,
+        created_at: profile.created_at,
+        updated_at: profile.updated_at
+      };
       
       console.log('Profile loaded with role:', userProfile);
       setUserProfile(userProfile);

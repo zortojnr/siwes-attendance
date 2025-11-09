@@ -13,7 +13,7 @@ export default function StudentDashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && userProfile && userProfile.role !== 'student') {
+    if (!loading && userProfile && userProfile.role !== 'student' && userProfile.role !== 'guest') {
       if (userProfile.role === 'admin') {
         navigate('/admin');
       }
@@ -28,7 +28,7 @@ export default function StudentDashboard() {
     );
   }
 
-  if (!userProfile || userProfile.role !== 'student') {
+  if (!userProfile || (userProfile.role !== 'student' && userProfile.role !== 'guest')) {
     return null;
   }
 

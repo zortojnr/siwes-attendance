@@ -43,12 +43,10 @@ interface AttendanceRecord {
   id: string;
   user_id: string;
   student_name: string;
-  matric_number?: string;
+  student_id: string;
   date: string;
   time: string;
-  latitude: number;
-  longitude: number;
-  location_name?: string;
+  location?: string | null;
   created_at: string;
 }
 
@@ -256,12 +254,11 @@ export default function SiwesApp() {
             .from('attendance_records')
             .insert({
               user_id: user?.id,
-              student_name: `${userProfile?.first_name} ${userProfile?.last_name}`,
+              student_name: `${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim(),
+              student_id: userProfile?.student_id || '',
               date,
               time,
-              latitude,
-              longitude,
-              location_name: 'Unknown Location'
+              location: 'On-site'
             })
             .select()
             .single();
@@ -343,16 +340,15 @@ export default function SiwesApp() {
 
     try {
       // Create CSV content
-      const headers = ['Student Name', 'Date', 'Time', 'Latitude', 'Longitude', 'Location'];
+      const headers = ['Student Name', 'Student ID', 'Date', 'Time', 'Location'];
       const csvContent = [
         headers.join(','),
         ...attendanceRecords.map(record => [
           `"${record.student_name}"`,
+          `"${record.student_id}"`,
           record.date,
           record.time,
-          record.latitude,
-          record.longitude,
-          `"${record.location_name || 'Unknown'}"`
+          `"${record.location || 'Unknown'}"`
         ].join(','))
       ].join('\n');
 
@@ -759,7 +755,7 @@ export default function SiwesApp() {
                             <div className="text-left sm:text-right">
                               <Badge variant="secondary" className="text-xs">
                                 <MapPin className="h-3 w-3 mr-1" />
-                                {record.latitude.toFixed(4)}, {record.longitude.toFixed(4)}
+                                {record.location || 'No location'}
                               </Badge>
                             </div>
                           </div>
