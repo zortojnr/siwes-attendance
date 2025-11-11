@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, MapPin, BarChart3, Settings } from "lucide-react";
+import { LayoutDashboard, Users, MapPin, BarChart3, Activity } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -15,10 +15,10 @@ import {
 
 const items = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
-  { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
   { title: "Students", url: "/admin/students", icon: Users },
+  { title: "Check-ins", url: "/admin/check-ins", icon: Activity },
   { title: "Locations", url: "/admin/locations", icon: MapPin },
-  { title: "Settings", url: "/admin/settings", icon: Settings },
+  { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
 ];
 
 export function AdminSidebar() {

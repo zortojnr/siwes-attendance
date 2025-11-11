@@ -4,7 +4,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AdminSidebar } from '@/components/AdminSidebar';
 import { DashboardHeader } from '@/components/DashboardHeader';
-import SiwesApp from '@/components/SiwesApp';
+import DashboardOverview from './admin/DashboardOverview';
+import StudentsPage from './admin/StudentsPage';
+import CheckInsPage from './admin/CheckInsPage';
+import LocationsPage from './admin/LocationsPage';
 import AnalyticsPage from './admin/AnalyticsPage';
 import { Loader2 } from 'lucide-react';
 
@@ -40,11 +43,11 @@ export default function AdminDashboard() {
           <DashboardHeader />
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
             <Routes>
-              <Route path="/" element={<SiwesApp />} />
+              <Route path="/" element={<DashboardOverview />} />
+              <Route path="/students" element={<StudentsPage />} />
+              <Route path="/check-ins" element={<CheckInsPage />} />
+              <Route path="/locations" element={<LocationsPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/students" element={<SiwesApp />} />
-              <Route path="/locations" element={<SiwesApp />} />
-              <Route path="/settings" element={<SiwesApp />} />
             </Routes>
           </main>
         </div>
